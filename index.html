@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}}</title>
+    <meta name="description" content="{{description}}" />
+    <meta name="theme-color" content="#f4f0e6" />
+    <link rel="stylesheet" href="/src/styles/site.css" />
+    <!--shoebox:head-->
+  </head>
+  <body class="shelf-page">
+    <!-- clips and playable builds sit here, behind the canvas, and show through the cut-out screens -->
+    <div id="stage"></div>
+    <canvas id="scene" aria-hidden="true"></canvas>
+
+    <header class="masthead">
+      <h1 class="hand">{{name}}</h1>
+    </header>
+
+    <!-- the index card: always there, always a plain link -->
+    <a class="index-card hand" href="list.html">{{list}}</a>
+
+    <main>
+      <button id="back" class="tape-button hand" type="button" hidden></button>
+      <div id="hotspots"></div>
+      <div id="card-slot" aria-hidden="true"></div>
+      <article id="card" hidden></article>
+    </main>
+
+    <button id="motion" class="pencil-button" type="button"></button>
+    <p id="status" class="sr-only" role="status"></p>
+    <noscript>
+      <p class="noscript">{{noscript}} <a href="list.html">{{list}}</a>.</p>
+    </noscript>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

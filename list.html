@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}}: {{list}}</title>
+    <meta name="description" content="{{description}}" />
+    <meta name="theme-color" content="#f4f0e6" />
+    <link rel="stylesheet" href="/src/styles/site.css" />
+    <!--shoebox:head-->
+  </head>
+  <!-- The plain, fast list. Baked from src/data/projects.js when the site is
+       built, so it needs no JavaScript and no WebGL. -->
+  <body class="list-page">
+    <header class="list-head">
+      <h1 class="hand">{{name}}</h1>
+      <!--shoebox:intro-->
+      <p><a class="tape-button hand" href="./">{{toShelf}}</a></p>
+    </header>
+    <main class="list">
+      <!--shoebox:list-->
+    </main>
+  </body>
+</html>
