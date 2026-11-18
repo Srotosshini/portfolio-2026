@@ -47,9 +47,11 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `projector` | photography: the slide projector, lens pointing right |
 | `screen` | photography: the paper sheet the photos are projected onto (one tracing is enough) |
 | `photo-corners` | photography: four photo corners on a transparent sheet, laid over every print |
-| `key-white`, `key-black`, `piano` | creative coding: one paper piano key of each kind, and the toy piano's body |
-| `window-frame` | creative coding: the cut edge round a window in black card (cut the opening out) |
-| `window-flap-sketch-1` … `window-flap-sketch-5` | creative coding: the flap over each sketch's window |
+| `gallery-frame` | creative coding: a paper frame for the paintings (cut the opening out: the middle 86 % across, 82 % down). It is used for every painting and yellows toward the 2025 end |
+| `doodle-stand`, `doodle-wave`, `doodle-point`, `doodle-jump` | creative coding: the doodle of you. Draw every pose on the same size of sheet so they line up; point to the right |
+| `floor-note` | creative coding: the note taped to the floor at the entrance |
+| `date-<slug>` | optional: a painting's date tag, hand-written (otherwise the date from the data file is written for you) |
+| `year-2025` | optional: the sign taped up where the corridor reaches 2025 |
 | `self-portrait` | About |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
@@ -67,6 +69,7 @@ If your projector drawing puts the lens or the slide slot somewhere other than t
 | `lining-<box>.jpg` | the inside of one box, if it should differ (`lining-about.jpg`) |
 | `back-<box>.jpg` | a drawing that fills one box's back wall (`back-games.jpg` replaces the stand-in neon) |
 | `film-strip.png` | one frame's width of film, sprocket holes cut out (transparent), repeated along the strip |
+| `gallery-wall.jpg`, `gallery-floor.jpg` | the gallery's walls, and its floorboards |
 
 **Everything else**
 
@@ -84,9 +87,15 @@ Game names in file names: `snikisnak`, `patchwork`, `duckie`, `park`, `jam`, `sp
 
 Photos need no list. To give one a caption (and a description for people using screen readers), add it under `photos` in `src/data/projects.js`, by file name without the extension.
 
-**Sketches** (creative coding) each have an entry in `src/data/projects.js`. Put the sketch's web address in `build`: for a p5.js sketch, its `https://editor.p5js.org/<you>/full/<id>` link, or a folder of your own in `public/` such as `sketches/flock/index.html`. It then runs live behind its window; until then a stand-in runs there. In the dark box the piano can also be played from a computer keyboard: A S D F G H J K for the white keys, W E T Y U for the black ones.
+**Sketches** (creative coding, the paper gallery) are listed in [src/data/sketches.js](src/data/sketches.js), newest first: title, date, one line, what each uses (mouse, mic, camera, hand, llm, arduino), and what you learned. Each sketch's files go in `public/sketches/<slug>/`:
 
-**Sound** is off until a visitor turns it on with the switch in the bottom-left corner. For now it is only the piano.
+| File | What it is |
+|---|---|
+| `index.html`, `sketch.js` | the sketch, copied from the p5 editor; it runs live when its painting is opened |
+| `loop.mp4` | 5 to 10 seconds of it being used, muted; this plays on the wall, and instead of the live sketch when it can't run live |
+| `still.jpg` | optional: one frame, for the timeline strip and the list page |
+
+Until a sketch's files are there, a stand-in plays in its painting. Sketches that use the mic or camera ask the visitor first, and show the loop if they say no; `llm` and `arduino` sketches always show their loop.
 
 ## Writing
 
@@ -105,9 +114,9 @@ index.html            the shelf
 list.html             the plain list (baked at build time, works without JavaScript)
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
-src/rooms/            one file per room (arcade.js, photography.js, code.js, about.js)
-src/lib/sketches.js   stand-in live sketches for the dark box; nothing here should survive
-src/lib/sound.js      the sound switch's sound: the piano's notes
+src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, about.js)
+src/data/sketches.js  the gallery's sketches and words
+src/lib/sketches.js   stand-in sketches for the gallery; nothing here should survive
 src/lib/paper.js      cutout, tab, shadow, pop-up, line boil
 src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the floor
 src/lib/stepped.js    the 12 fps stop-motion clock

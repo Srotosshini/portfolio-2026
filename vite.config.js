@@ -66,14 +66,14 @@ function shoebox() {
       const out = resolve(config.root, config.build.outDir)
       // Everything a first visit to the shelf downloads. Clips, process shots,
       // room drawings and room code only load once a box is opened.
-      const later = /^(clips|photos|process|builds)\/|^drawings\/(?!label-|shelf-)|^assets\/(arcade|about|photography)-|\.pdf$|^list\.html$/
+      const later = /^(clips|photos|process|builds|sketches)\/|^drawings\/(?!label-|shelf-)|^assets\/(arcade|about|photography|creative-coding|scraps)-|\.pdf$|^list\.html$/
       const landing = listFiles(out)
         .filter((f) => !later.test(f))
         .reduce((sum, f) => sum + statSync(join(out, f)).size, 0)
       const { countTodos } = await pages()
       const mb = (landing / 1024 / 1024).toFixed(2)
       console.log(`\n  shelf landing: ${mb} MB of the 3 MB budget${landing > 3 * 1024 * 1024 ? '  <-- over budget' : ''}`)
-      console.log(`  placeholder texts left in src/data/projects.js: ${countTodos()}\n`)
+      console.log(`  placeholder texts left in src/data (projects.js, sketches.js): ${countTodos()}\n`)
     },
   }
 }

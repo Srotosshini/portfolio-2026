@@ -27,8 +27,6 @@ export const site = {
     stopMotion: 'hold still',
     startMotion: 'let it move',
     claw: 'claw machine',
-    soundIsOn: 'sound on',
-    soundIsOff: 'sound off',
     windBack: 'wind the film back',
     windOn: 'wind the film on',
     noscript: 'The shelf needs JavaScript. Everything is also in the',
@@ -43,7 +41,6 @@ export const site = {
     learned: 'What I learned',
     play: 'Play it',
     clipSlot: 'clip goes here',
-    runSketch: 'Open it full size',
     cv: 'CV (PDF)',
     contact: 'Contact',
     photo: 'Photograph',
@@ -59,7 +56,7 @@ export const site = {
 export const boxes = [
   { id: 'games', label: 'Games', built: true },
   { id: 'photography', label: 'Photography', built: true },
-  { id: 'code', label: 'Creative coding', built: true },
+  { id: 'creative-coding', label: 'Creative coding', built: true },
   { id: 'design', label: 'Design', built: false },
   { id: 'research', label: 'Art and research', built: false },
   { id: 'about', label: 'About', built: true },
@@ -218,94 +215,6 @@ export const projects = [
     ],
     learned: 'TODO: a short paragraph on what you learned',
     links: [{ label: 'TODO: link label', href: '' }],
-  },
-  // ---- Creative coding: the dark box --------------------------------------
-  // Each sketch gets a key on the paper piano and a window cut in the back
-  // wall: press the key and the window opens with the sketch running live
-  // behind it. Keys and windows go left to right in this order.
-  //   build: the web address of the live sketch (for a p5.js sketch, its
-  //          https://editor.p5js.org/<you>/full/<id> link), or a folder of
-  //          your own in public/, like 'sketches/flock/index.html'. Left
-  //          empty, a stand-in runs in the window instead.
-  {
-    id: 'sketch-1',
-    box: 'code',
-    kind: 'sketch',
-    title: 'TODO: what sketch 1 is called',
-    pitch: 'TODO: one line about the sketch',
-    role: 'TODO: what you did on it',
-    tools: ['TODO: tools (p5.js, three.js, …)'],
-    build: '',
-    process: [
-      { src: 'process/sketch-1-1.jpg', alt: 'TODO: describe this image' },
-      { src: 'process/sketch-1-2.jpg', alt: 'TODO: describe this image' },
-    ],
-    learned: 'TODO: a short paragraph on what you learned',
-    links: [],
-  },
-  {
-    id: 'sketch-2',
-    box: 'code',
-    kind: 'sketch',
-    title: 'TODO: what sketch 2 is called',
-    pitch: 'TODO: one line about the sketch',
-    role: 'TODO: what you did on it',
-    tools: ['TODO: tools (p5.js, three.js, …)'],
-    build: '',
-    process: [
-      { src: 'process/sketch-2-1.jpg', alt: 'TODO: describe this image' },
-      { src: 'process/sketch-2-2.jpg', alt: 'TODO: describe this image' },
-    ],
-    learned: 'TODO: a short paragraph on what you learned',
-    links: [],
-  },
-  {
-    id: 'sketch-3',
-    box: 'code',
-    kind: 'sketch',
-    title: 'TODO: what sketch 3 is called',
-    pitch: 'TODO: one line about the sketch',
-    role: 'TODO: what you did on it',
-    tools: ['TODO: tools (p5.js, three.js, …)'],
-    build: '',
-    process: [
-      { src: 'process/sketch-3-1.jpg', alt: 'TODO: describe this image' },
-      { src: 'process/sketch-3-2.jpg', alt: 'TODO: describe this image' },
-    ],
-    learned: 'TODO: a short paragraph on what you learned',
-    links: [],
-  },
-  {
-    id: 'sketch-4',
-    box: 'code',
-    kind: 'sketch',
-    title: 'TODO: what sketch 4 is called',
-    pitch: 'TODO: one line about the sketch',
-    role: 'TODO: what you did on it',
-    tools: ['TODO: tools (p5.js, three.js, …)'],
-    build: '',
-    process: [
-      { src: 'process/sketch-4-1.jpg', alt: 'TODO: describe this image' },
-      { src: 'process/sketch-4-2.jpg', alt: 'TODO: describe this image' },
-    ],
-    learned: 'TODO: a short paragraph on what you learned',
-    links: [],
-  },
-  {
-    id: 'sketch-5',
-    box: 'code',
-    kind: 'sketch',
-    title: 'TODO: what sketch 5 is called',
-    pitch: 'TODO: one line about the sketch',
-    role: 'TODO: what you did on it',
-    tools: ['TODO: tools (p5.js, three.js, …)'],
-    build: '',
-    process: [
-      { src: 'process/sketch-5-1.jpg', alt: 'TODO: describe this image' },
-      { src: 'process/sketch-5-2.jpg', alt: 'TODO: describe this image' },
-    ],
-    learned: 'TODO: a short paragraph on what you learned',
-    links: [],
   },
 ]
 

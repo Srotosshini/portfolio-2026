@@ -7,7 +7,6 @@ import { createOverlay } from './lib/overlay.js'
 import { boil, PALETTE, unsent } from './lib/paper.js'
 import { files, onAssetLoaded, turn } from './lib/assets.js'
 import { itemExists } from './lib/pages.js'
-import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
 
 // One file per room. A room's code and drawings are only fetched the first
@@ -16,10 +15,11 @@ import { buildShelf } from './shelf.js'
 //   whole: always frame the whole room; it uses sideways drags itself
 //   slim: its pages are caption slips, not full project cards
 //   focus, fit: how the camera frames the room (see box.view in shelf.js)
+//   bare: an opened item has no side card; the room shows its own buttons
 const ROOMS = {
   games: { load: () => import('./rooms/arcade.js') },
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
-  code: { load: () => import('./rooms/code.js'), whole: true, focus: 0.42, fit: 1.04 },
+  'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, bare: true, focus: 0.5, fit: 1.04 },
   about: { load: () => import('./rooms/about.js'), card: true },
 }
 
@@ -46,6 +46,7 @@ async function start() {
   // Checking every new shader for errors makes the page wait for each one to
   // finish compiling. Useful while working on the site, a stall on the live one.
   renderer.debug.checkShaderErrors = import.meta.env.DEV
+  renderer.localClippingEnabled = true // the gallery corridor only shows between its box's walls
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
   // Shadows only change when something in the scene moves, never when only
@@ -211,7 +212,7 @@ async function start() {
   function viewNow() {
     if (!here.box) return { rect: shelf.frame(), region: FULL }
     const room = rooms.get(here.box)
-    if (here.item && room) return { rect: room.view(here.item), region: overlay.stageRegion() }
+    if (here.item && room) return { rect: room.view(here.item), region: ROOMS[here.box].bare ? FULL : overlay.stageRegion() }
     return { rect: roomRect(shelf.boxes.get(here.box)), region: ROOMS[here.box].card ? overlay.stageRegion() : FULL }
   }
 
@@ -328,10 +329,12 @@ async function start() {
     here.item = id
     setPlace('item')
     overlay.cardSize(ROOMS[here.box].slim ? 'slim' : '')
+    const bare = ROOMS[here.box].bare
     await veil(true)
-    await rig.go(room.view(id), { region: overlay.stageRegion(), duration: 1.1 })
+    await rig.go(room.view(id), { region: bare ? FULL : overlay.stageRegion(), duration: 1.1 })
     veil(false)
-    await overlay.showCard(room.card(id))
+    if (bare) room.show(id)
+    else await overlay.showCard(room.card(id))
   }
 
   // straight from one item to the next without backing out (photo to photo)
@@ -347,7 +350,8 @@ async function start() {
   async function closeItem() {
     const id = here.item
     const room = rooms.get(here.box)
-    await overlay.hideCard()
+    if (ROOMS[here.box].bare) room.hide()
+    else await overlay.hideCard()
     here.item = null
     rig.parallax = 1
     rig.lift = ROOM_LIFT
@@ -397,6 +401,7 @@ async function start() {
   let drag = null
   addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') rig.point((e.clientX / innerWidth) * 2 - 1, 1 - (e.clientY / innerHeight) * 2)
+    if (here.box && !here.item) rooms.get(here.box)?.pointer?.(e.clientX / innerWidth) // the gallery's doodle follows it
     if (!drag) return
     if (!drag.moved && Math.abs(e.clientX - drag.x) < 8) return
     if (!drag.moved) document.body.classList.add('is-dragging')
@@ -466,34 +471,6 @@ async function start() {
     } catch {}
   })
 
-  // ---- sound (off unless the visitor turns it on) ---------------------------
-  const soundSwitch = document.querySelector('#sound')
-  function setSound(on) {
-    sound.set(on)
-    soundSwitch.textContent = on ? ui.soundIsOn : ui.soundIsOff
-    soundSwitch.setAttribute('aria-pressed', String(on))
-  }
-  setSound((() => {
-    try {
-      return localStorage.getItem('sound') === 'on'
-    } catch {
-      return false
-    }
-  })())
-  soundSwitch.addEventListener('click', () => {
-    setSound(!sound.on)
-    try {
-      localStorage.setItem('sound', sound.on ? 'on' : 'off')
-    } catch {}
-  })
-  // a note was played with the sound off: show where to turn it on
-  sound.hint = () => {
-    soundSwitch.classList.remove('nudge')
-    void soundSwitch.offsetWidth // restart the wave if it is already going
-    soundSwitch.classList.add('nudge')
-  }
-  soundSwitch.addEventListener('animationend', () => soundSwitch.classList.remove('nudge'))
-
   // ---- size ---------------------------------------------------------------
   function resize() {
     const w = innerWidth
@@ -521,6 +498,8 @@ async function start() {
     stepped.update(dt)
     const cameraMoved = rig.update(dt)
     if (cameraMoved) draw = true
+    // a room that moves smoothly every frame (walking the gallery); no shadows change
+    if (here.box && rooms.get(here.box)?.frame?.(dt)) draw = true
     if (stepped.dirty) redraw() // paper moved: its shadows move too
     if (stepped.looks) draw = true
     stepped.dirty = stepped.looks = false

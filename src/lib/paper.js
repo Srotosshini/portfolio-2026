@@ -78,7 +78,9 @@ export function fillArea(map, imageAspect, areaAspect) {
 // round, and make a blank back with a little marker bleed-through.
 // Also reports a cut-out window (a transparent hole enclosed by paper), which
 // the arcade uses to find each cabinet's screen.
-export function prepCutout(source, { edge = 5, maxSize = 1024 } = {}) {
+// `trim: false` keeps the whole sheet, so drawings made on the same size of
+// sheet (the poses of a figure) stay the same size and line up.
+export function prepCutout(source, { edge = 5, maxSize = 1024, trim = true } = {}) {
   const sw = source.naturalWidth || source.width
   const sh = source.naturalHeight || source.height
   const scale = Math.min(1, maxSize / Math.max(sw, sh))
@@ -101,7 +103,7 @@ export function prepCutout(source, { edge = 5, maxSize = 1024 } = {}) {
       }
     }
   }
-  if (x1 < 0) [x0, y0, x1, y1] = [0, 0, w - 1, h - 1]
+  if (x1 < 0 || !trim) [x0, y0, x1, y1] = [0, 0, w - 1, h - 1]
 
   const W = x1 - x0 + 1 + edge * 2
   const H = y1 - y0 + 1 + edge * 2

@@ -1,11 +1,27 @@
-// Stand-in live sketches for the dark box, running until her own sketches
-// take their place (a sketch's `build` address in src/data/projects.js).
-// Each draws into a canvas that sits behind its paper window, and leans
-// toward the pointer when the pointer is over it. Like everything in
-// placeholders.js, none of this is meant to survive to the finished site.
+// Stand-in sketches for the paper gallery, until her own are in
+// public/sketches/<slug>/. `standIn` runs one live in an opened painting,
+// leaning toward the pointer; `preview` is a small one for the wall, stepped
+// on the 12 fps clock. Like everything in placeholders.js, none of this is
+// meant to survive to the finished site.
 const W = 800
 const H = 600
 const NIGHT = '#0d0d12'
+
+// a small copy for a painting on the wall: call step(t) to draw the next frame
+export function preview(index, tint, width = 240, height = 180) {
+  const node = document.createElement('canvas')
+  node.width = width
+  node.height = height
+  const ctx = node.getContext('2d')
+  ctx.setTransform(width / W, 0, 0, height / H, 0, 0) // the sketches draw at 800 × 600
+  ctx.fillStyle = NIGHT
+  ctx.fillRect(0, 0, W, H)
+  const frame = SKETCHES[index % SKETCHES.length](ctx, tint, { x: W / 2, y: H / 2, over: false })
+  return { node, step: frame }
+}
+
+// the code of a stand-in, for the back of its painting until her own code is there
+export const standInCode = (index) => `// a stand-in, until the real sketch is in its folder\nconst draw = ${SKETCHES[index % SKETCHES.length].toString()}\n`
 
 export function standIn(index, tint) {
   const node = document.createElement('canvas')

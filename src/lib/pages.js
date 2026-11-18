@@ -3,6 +3,7 @@
 // and at build time, to bake list.html so it works with no JavaScript or WebGL.
 // Keep it free of browser-only code.
 import { site, boxes, projects, about, photos } from '../data/projects.js'
+import { sketches, words } from '../data/sketches.js'
 
 const TODO = /^TODO:\s*/
 export const isTodo = (s) => typeof s === 'string' && TODO.test(s)
@@ -46,7 +47,7 @@ export function renderProject(p, { files = [], base = '', level = 2, media = tru
   }
   // a playable build or a live sketch can always be opened full size, even
   // when it is already running in its cabinet or window
-  if (p.build) out.push(`<p><a class="button hand" href="${esc(p.build)}">${esc(p.kind === 'sketch' ? L.runSketch : L.play)}</a></p>`)
+  if (p.build) out.push(`<p><a class="button hand" href="${esc(p.build)}">${esc(L.play)}</a></p>`)
 
   const shots = (p.process || [])
     .map((s) =>
@@ -87,6 +88,7 @@ export function photoList(files = []) {
 // Is there a page for this address (#/box/id)?
 export function itemExists(box, id, files = []) {
   if (projects.some((p) => p.box === box && p.id === id)) return true
+  if (box === 'creative-coding') return sketches.some((s) => s.slug === id)
   return box === 'photography' && photoList(files).some((p) => p.id === id)
 }
 
@@ -139,6 +141,19 @@ export function renderList(files = []) {
       const head = `<h2 class="hand">${esc(b.label)}</h2>`
       if (!b.built) return `<section class="room unbuilt">${head}<p class="hand note">${esc(site.ui.unbuilt)}</p></section>`
       const inBox = `<p class="see"><a class="hand" href="./#/${b.id}">${esc(site.ui.seeInBox)}</a></p>`
+      if (b.id === 'creative-coding') {
+        const cards = sketches.map((s) => {
+          const still = files.find((f) => f.startsWith(`sketches/${s.slug}/still.`))
+          const look = files.includes(s.loop)
+            ? `<video class="sketch-loop" src="${esc(s.loop)}"${still ? ` poster="${esc(still)}"` : ''} muted loop playsinline autoplay preload="metadata"></video>`
+            : still
+              ? `<img class="sketch-loop" src="${esc(still)}" alt="" loading="lazy">`
+              : ''
+          const line = text(s.oneLiner)
+          return `<article class="card sketch-card" id="${esc(s.slug)}">${look}<div><h3 class="hand title">${esc(s.title)}</h3><p class="sketch-date">${esc(s.date)}</p>${line ? `<p>${line}</p>` : ''}<p class="see"><a class="hand" href="./#/${b.id}/${esc(s.slug)}">${esc(words.openIt)}</a></p></div></article>`
+        })
+        return `<section class="room" id="${b.id}">${head}${cards.join('\n')}</section>`
+      }
       if (b.id === 'photography') {
         const real = photoList(files).filter((p) => p.real)
         const prints = real.map((p) => {
@@ -195,5 +210,5 @@ export function fillPage(html, { files = [], list = false } = {}) {
 export function countTodos() {
   const count = (v) =>
     typeof v === 'string' ? Number(isTodo(v)) : v && typeof v === 'object' ? Object.values(v).reduce((n, x) => n + count(x), 0) : 0
-  return count(site) + count(projects) + count(about)
+  return count(site) + count(projects) + count(about) + count(sketches)
 }

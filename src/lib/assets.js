@@ -32,7 +32,7 @@ export function loadImage(path) {
 
 // A drawing slot, ready for makePiece()/makeFlat(): her tracings if they are
 // in /public, otherwise `placeholder(n)` drawn `tracings` times.
-export async function art(stem, placeholder, { edge = 5, tracings = 2 } = {}) {
+export async function art(stem, placeholder, { edge = 5, tracings = 2, trim = true } = {}) {
   let sources
   const real = tracingsOf(stem)
   if (real.length) {
@@ -52,7 +52,7 @@ export async function art(stem, placeholder, { edge = 5, tracings = 2 } = {}) {
   const preps = []
   for (const source of sources) {
     await turn()
-    preps.push(prepCutout(source, { edge }))
+    preps.push(prepCutout(source, { edge, trim }))
   }
   return preps
 }
