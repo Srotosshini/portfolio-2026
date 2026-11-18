@@ -24,7 +24,7 @@ The build prints two numbers: how heavy the shelf landing is against the 3 MB bu
 
 ## Putting the artwork in
 
-Most placeholders print the file name they are waiting for. Save the real file under that name and the placeholder is gone.
+Each placeholder is replaced by saving the real file under the name listed below.
 
 **Drawings** go in `public/drawings/`, with a transparent background.
 

@@ -1,12 +1,12 @@
 // Stand-in drawings and materials, so the site works (and looks like a paper
 // diorama) before any real artwork exists.
 // Every one of these is replaced by dropping a real file into /public (see the
-// README), and most of them print the file name they are waiting for. Nothing
-// in this file is meant to survive to the finished site.
+// README). Nothing
+// in this file is meant to survive to the finished site. They carry no
+// writing except the names that tell them apart.
 import { PALETTE as P, rng, canvas } from './paper.js'
 
 export const HAND = '"Shelf Hand", "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive'
-const MONO = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace'
 const HI = P.highlighter
 
 // ------------------------------------------------------------------ tools
@@ -175,12 +175,6 @@ function write(ctx, str, x, y, { size = 48, max = 1e4, maxH = 1e4, lines = 1, co
   ctx.restore()
 }
 
-// the pencil note that names the file a placeholder is waiting for
-function note(ctx, file, x, y, max, color = P.pencil) {
-  write(ctx, 'placeholder', x, y, { size: 19, max, color, font: MONO, weight: 500 })
-  write(ctx, file, x, y + 26, { size: 19, max, color, font: MONO, weight: 500 })
-}
-
 // ------------------------------------------------------------------ arcade
 
 // Three cereal-box silhouettes, so the row of cabinets is not five of the same.
@@ -196,7 +190,7 @@ const MARQUEES = [
 ]
 
 // A cereal-box cabinet with a cut-out screen.
-export function cabinet({ title, accent, file, style = 0 }, seed = 1) {
+export function cabinet({ title, accent, style = 0 }, seed = 1) {
   const c = canvas(640, 1000)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -247,7 +241,6 @@ export function cabinet({ title, accent, file, style = 0 }, seed = 1) {
     m.blob(150, 824, 30, 28, null, { width: 4 })
   }
   fibres(ctx)
-  note(ctx, file, 322, 916, 540)
   return c
 }
 
@@ -263,7 +256,7 @@ export function coin(seed = 1) {
   return c
 }
 
-export function clawMachine({ file }, seed = 1) {
+export function clawMachine(seed = 1) {
   const c = canvas(520, 1000)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -281,7 +274,6 @@ export function clawMachine({ file }, seed = 1) {
   m.blob(406, 706, 22, 22, P.paper)
   m.highlight(oval(406, 706, 20, 20), HI.pink, 14)
   fibres(ctx)
-  note(ctx, file, 262, 908, 440)
   return c
 }
 
@@ -330,23 +322,22 @@ export function character(index, seed = 1) {
 }
 
 // The quiet cutout for a project that is not a cabinet: a placard on legs.
-export function placard({ title, file }, seed = 1) {
+export function placard({ title }, seed = 1) {
   const c = canvas(520, 600)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
   m.shape([[150, 410], [192, 410], [150, 586], [116, 586]], P.paper)
   m.shape([[330, 410], [372, 410], [404, 586], [370, 586]], P.paper)
   m.shape([[30, 40], [492, 30], [498, 424], [24, 432]], P.paper)
-  write(ctx, title, 260, 190, { size: 50, max: 400, lines: 3 })
+  write(ctx, title, 260, 228, { size: 50, max: 400, lines: 3 })
   fibres(ctx)
-  note(ctx, file, 260, 352, 430)
   return c
 }
 
 // What a cabinet screen plays until it has a clip or a still: a little
 // looping doodle, redrawn a few times a second. `index` picks the doodle,
-// `frame` counts up, `lines` are the "which file goes here" notes.
-export function attract(ctx, index, frame, { title, lines = [] }) {
+// `frame` counts up.
+export function attract(ctx, index, frame, { title }) {
   const tints = Object.values(HI)
   ctx.fillStyle = '#1b1b22'
   ctx.fillRect(0, 0, 240, 135)
@@ -415,8 +406,7 @@ export function attract(ctx, index, frame, { title, lines = [] }) {
       }
     }
   }
-  if (t % 8 < 6) write(ctx, title, 120, lines.length ? 103 : 112, { size: 20, max: 222, color: P.paper })
-  lines.forEach((line, i) => write(ctx, line, 120, 119 + i * 9, { size: 7.5, max: 232, color: '#a9a69c', font: MONO, weight: 500 }))
+  if (t % 8 < 6) write(ctx, title, 120, 112, { size: 20, max: 222, color: P.paper })
 }
 
 // Stand-in neon for the arcade's back wall: bright tubes on one canvas and
@@ -498,7 +488,7 @@ export function tape(text, seed = 1, { width = 560, height = 150 } = {}) {
 }
 
 // loose things on the shelf: a jar of markers and a roll of tape
-export function jar({ file }, seed = 1) {
+export function jar(seed = 1) {
   const c = canvas(360, 520)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -513,11 +503,10 @@ export function jar({ file }, seed = 1) {
   m.shape([[52, 226], [308, 220], [300, 500], [60, 506]], P.paper)
   m.line([[52, 262], [308, 256]])
   fibres(ctx)
-  note(ctx, file, 180, 372, 220)
   return c
 }
 
-export function tapeRoll({ file }, seed = 1) {
+export function tapeRoll(seed = 1) {
   const c = canvas(360, 340)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -525,7 +514,6 @@ export function tapeRoll({ file }, seed = 1) {
   m.hole(oval(180, 170, 74, 72))
   m.blob(180, 170, 118, 114, null, { width: 3 })
   fibres(ctx)
-  write(ctx, file, 180, 296, { size: 15, max: 200, color: P.pencil, font: MONO, weight: 500 })
   return c
 }
 
@@ -596,7 +584,7 @@ export function corrugated(vertical = false) {
 
 // ------------------------------------------------------------------ about
 
-export function portrait({ file }, seed = 1) {
+export function portrait(seed = 1) {
   const c = canvas(480, 660)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -608,7 +596,6 @@ export function portrait({ file }, seed = 1) {
   m.line([[116, 250], [364, 250]], { color: P.pencil, width: 3 })
   ctx.setLineDash([])
   fibres(ctx)
-  note(ctx, file, 240, 548, 340)
   return c
 }
 
@@ -699,18 +686,17 @@ export function crank(seed = 1) {
 }
 
 // the little trestle a reel stands on
-export function reelStand({ file }, seed = 1) {
+export function reelStand(seed = 1) {
   const c = canvas(360, 420)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
   m.shape([[150, 30], [210, 30], [336, 404], [24, 404]], P.paper)
   m.hole([[152, 196], [208, 196], [258, 340], [102, 340]])
   fibres(ctx)
-  write(ctx, file, 180, 384, { size: 14, max: 280, color: P.pencil, font: MONO, weight: 500 })
   return c
 }
 
-export function projector({ file }, seed = 1) {
+export function projector(seed = 1) {
   const c = canvas(600, 460)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
@@ -726,7 +712,6 @@ export function projector({ file }, seed = 1) {
   m.blob(330, 250, 36, 34, null, { width: 5 })
   m.line([[330, 250], [352, 228]], { width: 5 })
   fibres(ctx)
-  note(ctx, file, 244, 348, 330)
   return c
 }
 
@@ -748,8 +733,8 @@ export function screenSheet(seed = 1) {
   return c
 }
 
-// a stand-in photograph: a card in a muted tone that says where the photo goes
-export function photoCard(index, file) {
+// a stand-in photograph: a card in a muted tone with its frame number
+export function photoCard(index) {
   const c = canvas(600, 400)
   const ctx = c.getContext('2d')
   const tones = ['#c9cdea', '#e6d3a8', '#cdb5b5', '#bbcfbb', '#efe4cc', '#aab3d6', '#d9c4a0', '#c4cbc2']
@@ -766,9 +751,8 @@ export function photoCard(index, file) {
   ctx.lineTo(18, 382)
   ctx.stroke()
   ctx.fillStyle = tones[index % tones.length]
-  ctx.fillRect(110, 132, 380, 136)
-  write(ctx, String(index + 1).padStart(2, '0'), 300, 176, { size: 64 })
-  write(ctx, `photo goes here: public/${file}`, 300, 236, { size: 18, max: 360, color: P.pencil, font: MONO, weight: 500 })
+  ctx.fillRect(196, 152, 208, 96)
+  write(ctx, String(index + 1).padStart(2, '0'), 300, 202, { size: 64 })
   return c
 }
 

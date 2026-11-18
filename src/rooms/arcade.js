@@ -38,18 +38,16 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     Promise.all(
       games.map((game, i) =>
         art(`drawings/cabinet-${game.id}`, (seed) =>
-          sketch.cabinet({ title: game.title, accent: accents[i % accents.length], style: i, file: `drawings/cabinet-${game.id}-1.png` }, seed),
+          sketch.cabinet({ title: game.title, accent: accents[i % accents.length], style: i }, seed),
         ),
       ),
     ),
     Promise.all(
       quiet.map((project) =>
-        art(`drawings/cutout-${project.id}`, (seed) =>
-          sketch.placard({ title: project.title, file: `drawings/cutout-${project.id}-1.png` }, seed),
-        ),
+        art(`drawings/cutout-${project.id}`, (seed) => sketch.placard({ title: project.title }, seed)),
       ),
     ),
-    art('drawings/claw-machine', (seed) => sketch.clawMachine({ file: 'drawings/claw-machine-1.png' }, seed)),
+    art('drawings/claw-machine', (seed) => sketch.clawMachine(seed)),
     art('drawings/claw', (seed) => sketch.claw(seed)),
     art('drawings/coin', (seed) => sketch.coin(seed)),
     Promise.all([0, 1, 2].map((i) => art(`drawings/character-${i + 1}`, (seed) => sketch.character(i, seed)))),
@@ -107,18 +105,13 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
         })
         .catch(() => {})
     } else {
-      // no still yet: a doodle loop, with a note saying which file it is waiting for
+      // no still yet: a little doodle loop, like an arcade's attract mode
       const loop = canvas(240, 135)
       const ctx = loop.getContext('2d')
-      const lines = !site.placeholders
-        ? []
-        : has(game.clip) || game.build
-          ? ['still image goes here', `public/${game.poster}`]
-          : ['clip goes here', `public/${game.clip}`]
       idle.map = texture(loop)
       idle.map.magFilter = THREE.NearestFilter // close up it goes chunky, like an old arcade screen
       play = (frame) => {
-        sketch.attract(ctx, index, frame, { title: game.title, lines })
+        sketch.attract(ctx, index, frame, { title: game.title })
         idle.map.needsUpdate = true
       }
       play(index * 3)

@@ -12,9 +12,7 @@ export async function build({ box, stepped }) {
   room.position.y = box.inner.floor
   box.body.add(room)
 
-  const portraitArt = await art('drawings/self-portrait', (seed) =>
-    sketch.portrait({ file: 'drawings/self-portrait-1.png' }, seed),
-  )
+  const portraitArt = await art('drawings/self-portrait', (seed) => sketch.portrait(seed))
   const portrait = makePiece(portraitArt, { height: 1.45 })
   portrait.group.position.set(-0.2, 0, -1.5)
   portrait.group.rotation.y = 0.06

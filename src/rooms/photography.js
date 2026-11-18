@@ -73,8 +73,8 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   // her drawings where they exist, labelled stand-ins where they do not
   const [reelArt, standArt, projectorArt, screenArt, cornerArt, crankArt] = await Promise.all([
     art('drawings/reel', (seed) => sketch.reel(seed)),
-    art('drawings/reel-stand', (seed) => sketch.reelStand({ file: 'drawings/reel-stand-1.png' }, seed)),
-    art('drawings/projector', (seed) => sketch.projector({ file: 'drawings/projector-1.png' }, seed)),
+    art('drawings/reel-stand', (seed) => sketch.reelStand(seed)),
+    art('drawings/projector', (seed) => sketch.projector(seed)),
     art('drawings/screen', (seed) => sketch.screenSheet(seed), { tracings: 1 }),
     art('drawings/photo-corners', (seed) => sketch.photoCorners(seed), { edge: 0 }),
     art('drawings/crank', (seed) => sketch.crank(seed)),
@@ -175,7 +175,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     if (print.map || print.loading) return
     print.loading = true
     const { photo } = print
-    if (!photo.real) return dress(print, texture(sketch.photoCard(print.i, photo.src)), 1.5)
+    if (!photo.real) return dress(print, texture(sketch.photoCard(print.i)), 1.5)
     loadImage(photo.thumb)
       .then((img) => dress(print, texture(img), img.width / img.height))
       .catch(() => {})

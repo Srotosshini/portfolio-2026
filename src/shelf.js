@@ -117,8 +117,8 @@ export async function buildShelf({ stepped }) {
   const [labels, closedTape, jarArt, rollArt] = await Promise.all([
     Promise.all(boxData.map((b) => art(`drawings/label-${b.id}`, (seed) => sketch.tape(b.label, seed), { edge: 0 }))),
     art('drawings/label-unbuilt', (seed) => sketch.tape(site.ui.unbuilt, seed, { width: 900 }), { edge: 0 }),
-    art('drawings/shelf-jar', (seed) => sketch.jar({ file: 'drawings/shelf-jar-1.png' }, seed)),
-    art('drawings/shelf-roll', (seed) => sketch.tapeRoll({ file: 'drawings/shelf-roll-1.png' }, seed)),
+    art('drawings/shelf-jar', (seed) => sketch.jar(seed)),
+    art('drawings/shelf-roll', (seed) => sketch.tapeRoll(seed)),
   ])
 
   const boxes = new Map()
