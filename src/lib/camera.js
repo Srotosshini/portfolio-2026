@@ -6,7 +6,8 @@ import * as THREE from 'three'
 const FOV = 20
 const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
 export const FULL = { left: 0, top: 0, right: 1, bottom: 1 }
-const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+// gentle at both ends but moving from the first frame, so a glide never reads as a pause and then a cut
+const ease = (t) => (1 - Math.cos(Math.PI * t)) / 2
 
 export function createRig() {
   const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 220)
@@ -74,6 +75,11 @@ export function createRig() {
     // pointer position across the window, -1..1 on both axes
     point(x, y) {
       pointer.set(x, y)
+    },
+
+    // is a glide in progress?
+    get moving() {
+      return !!move
     },
 
     // how much of the framed plane one screen pixel covers

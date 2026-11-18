@@ -132,11 +132,16 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     }
   }
 
-  const spacing = Math.min(1.03, (inner.w - 0.04 - MACHINE_WIDTH - CABINET_WIDTH) / Math.max(1, games.length - 1))
-  const left = -inner.w / 2 + 0.02 + CABINET_WIDTH / 2
+  // The cabinets share the floor left of the claw machine. With many games
+  // they get a little narrower, so a cabinet in front only ever covers the
+  // edge of the one behind it, never its screen.
+  const share = inner.w - 0.04 - MACHINE_WIDTH
+  const cabinetWidth = Math.min(CABINET_WIDTH, share / (1 + (games.length - 1) * 0.85))
+  const spacing = games.length > 1 ? Math.min(cabinetWidth * 0.873, (share - cabinetWidth) / (games.length - 1)) : 0
+  const left = -inner.w / 2 + 0.02 + cabinetWidth / 2
   const cabinets = games.map((game, i) => {
     const front = i % 2 === 0 // every other one stands a step forward, toy-theatre style
-    const piece = makePiece(cabinetArt[i], { width: front ? CABINET_WIDTH : CABINET_WIDTH * 1.05 })
+    const piece = makePiece(cabinetArt[i], { width: front ? cabinetWidth : cabinetWidth * 1.05 })
     piece.group.position.set(left + i * spacing, 0, front ? FRONT_ROW : BACK_ROW)
     piece.group.rotation.y = (rand() - 0.5) * 0.07
     room.add(piece.group)
@@ -385,7 +390,10 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     const dx = aim - claw.mesh.position.x
     if (!aimed || Math.abs(dx) < 0.004) return false
     claw.mesh.position.x += dx * 0.55 // the claw trails after the pointer, a frame at a time
+    return 'looks' // behind the glass: no shadow worth redrawing
   })
+  // the characters sway on their strings, the screens play their loops (none of it
+  // changes a shadow you could see, so the shadows are left alone)
   stepped.every(2, (frame) => {
     if (!standing) return false
     for (const toy of toys) {
@@ -393,8 +401,8 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
       toy.swing = Math.max(0.05, toy.swing * 0.88)
       toy.hang.rotation.z = Math.sin(frame * 0.33 + toy.phase) * toy.swing
     }
-    if (playing) return
-    cabinets.forEach((cabinet, i) => cabinet.screen.play?.(frame / 2 + i * 3)) // attract loops
+    if (!playing) cabinets.forEach((cabinet, i) => cabinet.screen.play?.(frame / 2 + i * 3))
+    return 'looks'
   })
 
   const find = (id) => [...cabinets, ...cutouts].find((c) => (c.game ?? c.project).id === id)

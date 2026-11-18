@@ -41,7 +41,25 @@ export function texture(source) {
   t.colorSpace = THREE.SRGBColorSpace
   t.anisotropy = 4
   t.needsUpdate = true
+  unsent.push(t)
   return t
+}
+// Textures not yet handed to the graphics card. main.js sends a room's over a
+// frame at a time before the room is first seen, rather than all in its first
+// frame (which a modest graphics chip shows as a freeze).
+export const unsent = []
+
+// A soft round glow: light, not paper (a projector lens, a pinhole, dust in a beam).
+export function lightDot() {
+  const c = canvas(64, 64)
+  const ctx = c.getContext('2d')
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+  g.addColorStop(0, 'rgba(255, 246, 225, 1)')
+  g.addColorStop(0.3, 'rgba(255, 228, 180, 0.55)')
+  g.addColorStop(1, 'rgba(255, 210, 150, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 64, 64)
+  return c
 }
 
 // Make a picture fill an area of a different shape, cropping whichever way it
@@ -94,8 +112,8 @@ export function prepCutout(source, { edge = 5, maxSize = 1024 } = {}) {
   let ctx = front.getContext('2d')
   if (edge > 0) {
     // the silhouette, grown by `edge` pixels and filled paper-white
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2
       ctx.drawImage(work, ox + Math.cos(a) * edge, oy + Math.sin(a) * edge)
     }
     ctx.globalCompositeOperation = 'source-in'
@@ -388,6 +406,6 @@ export function boil(stepped, things, active = () => true, hold = 3) {
         changed = true
       }
     })
-    return changed
+    return changed && 'looks' // a new tracing, same silhouette: the shadows can stay
   })
 }

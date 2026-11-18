@@ -43,8 +43,10 @@ export function renderProject(p, { files = [], base = '', level = 2, media = tru
       const poster = has(p.poster) ? ` poster="${base}${esc(p.poster)}"` : ''
       out.push(`<video class="clip" controls playsinline muted loop preload="none"${poster} src="${base}${esc(p.clip)}"></video>`)
     } else if (p.clip && !p.build) out.push(slot(L.clipSlot, p.clip))
-    if (p.build) out.push(`<p><a class="button hand" href="${esc(p.build)}">${esc(L.play)}</a></p>`)
   }
+  // a playable build or a live sketch can always be opened full size, even
+  // when it is already running in its cabinet or window
+  if (p.build) out.push(`<p><a class="button hand" href="${esc(p.build)}">${esc(p.kind === 'sketch' ? L.runSketch : L.play)}</a></p>`)
 
   const shots = (p.process || [])
     .map((s) =>

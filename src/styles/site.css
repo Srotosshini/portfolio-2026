@@ -158,6 +158,19 @@ a {
   mix-blend-mode: multiply;
 }
 
+#veil {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: var(--paper);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.17s linear;
+}
+#veil.is-on {
+  opacity: 1;
+}
+
 /* the film in the reel room can be taken hold of anywhere */
 body[data-room='photography'][data-place='room'] {
   cursor: grab;
@@ -269,12 +282,17 @@ body.is-dragging .hotspot {
   left: 1.25rem;
 }
 
-/* a scrap of paper with a pencil note: the switch that stops all the motion */
-.pencil-button {
+/* Scraps of paper with pencil notes: the switches for motion and sound. */
+.switches {
   position: fixed;
-  z-index: 3; /* under the card, so it never sits on top of a project page */
+  z-index: 3; /* under the card, so they never sit on top of a project page */
   left: 1rem;
   bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.pencil-button {
   padding: 0.3rem 0.6rem;
   border: 0;
   background: var(--card);
@@ -285,6 +303,30 @@ body.is-dragging .hotspot {
   cursor: pointer;
   transform: rotate(1.5deg);
   box-shadow: 0 1px 2px rgba(40, 28, 10, 0.3);
+}
+.pencil-button + .pencil-button {
+  transform: rotate(-1.2deg);
+}
+.pencil-button[aria-pressed='true'] {
+  color: var(--navy);
+}
+/* a key was played with the sound off: the switch gives a little wave */
+.pencil-button.nudge {
+  animation: nudge 0.5s steps(5, end);
+}
+@keyframes nudge {
+  20% {
+    transform: rotate(-7deg) translateY(-3px);
+  }
+  40% {
+    transform: rotate(5deg);
+  }
+  60% {
+    transform: rotate(-4deg) translateY(-1px);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
 }
 
 .noscript {

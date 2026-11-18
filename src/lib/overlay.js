@@ -89,6 +89,22 @@ export function createOverlay(camera) {
       for (const pin of pins) place(pin.node, pin.corners(), 1)
     },
 
+    // Put any element (a canvas, an iframe) behind the scene, pinned to the
+    // hole at `corners()` that has been cut through the scene for it.
+    pin(node, corners) {
+      node.classList.add('media')
+      el.stage.append(node)
+      pins.push({ node, corners })
+      overlay.update()
+      return node
+    },
+    unpin(node) {
+      const at = pins.findIndex((pin) => pin.node === node)
+      if (at >= 0) pins.splice(at, 1)
+      node.pause?.()
+      node.remove()
+    },
+
     // Put a project's clip or playable build behind the canvas, pinned to the
     // screen-shaped hole at `corners()`. Returns null if there is nothing to show yet.
     mountMedia(project, corners, { files, base }) {

@@ -5,10 +5,10 @@
 // lights go down and it is thrown big onto the paper screen on the back wall.
 import * as THREE from 'three'
 import { site } from '../data/projects.js'
-import { PALETTE as P, makePiece, makeHinged, makeFlat, texture, paperMaterial, canvas, stack, popUp, foldFlat, boil, rng } from '../lib/paper.js'
+import { PALETTE as P, makePiece, makeHinged, makeFlat, texture, paperMaterial, canvas, lightDot, stack, popUp, foldFlat, boil, rng } from '../lib/paper.js'
 import { createScraps } from '../lib/scraps.js'
 import * as sketch from '../lib/placeholders.js'
-import { art, scan, files, base, loadImage } from '../lib/assets.js'
+import { art, scan, files, base, loadImage, turn } from '../lib/assets.js'
 import { photoList, renderPhoto } from '../lib/pages.js'
 
 // ---- the film
@@ -33,18 +33,7 @@ const SLOT = { x: 0.35, y: 0.98 }
 const SCREEN_W = 2.3
 const MOTES = 36 // dust in the beam
 
-// light, not artwork: a soft round glow, and the darkening toward the edges of a projected picture
-function glowDot() {
-  const c = canvas(64, 64)
-  const ctx = c.getContext('2d')
-  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-  g.addColorStop(0, 'rgba(255, 246, 225, 1)')
-  g.addColorStop(0.3, 'rgba(255, 228, 180, 0.55)')
-  g.addColorStop(1, 'rgba(255, 210, 150, 0)')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, 64, 64)
-  return c
-}
+// light, not artwork: the darkening toward the edges of a projected picture
 function lightFalloff() {
   const c = canvas(256, 256)
   const ctx = c.getContext('2d')
@@ -175,7 +164,8 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     if (print.map || print.loading) return
     print.loading = true
     const { photo } = print
-    if (!photo.real) return dress(print, texture(sketch.photoCard(print.i)), 1.5)
+    // stand-ins are drawn one per frame, so the film never stalls a camera glide
+    if (!photo.real) return void turn().then(() => dress(print, texture(sketch.photoCard(print.i)), 1.5))
     loadImage(photo.thumb)
       .then((img) => dress(print, texture(img), img.width / img.height))
       .catch(() => {})
@@ -342,7 +332,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
   )
   beam.frustumCulled = false
-  const dot = texture(glowDot())
+  const dot = texture(lightDot())
   const lensGlow = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: dot, color: 0xfff0d0, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
   )
@@ -414,6 +404,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     const flicker = 0.93 + rand() * 0.07
     glow.color.setRGB(flicker, flicker * 0.96, flicker * 0.88)
     beam.material.opacity = flicker
+    return 'looks' // light and dust cast no shadows
   })
 
   // Put a print's photo up on the screen: the small copy straight away, the

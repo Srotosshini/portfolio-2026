@@ -12,7 +12,8 @@ export function createStepped() {
   const stepped = {
     frame: 0,
     reduced: false, // reduced motion: tweens jump to their last pose, loops stop
-    dirty: false, // something moved on a tick, so the scene needs redrawing
+    dirty: false, // something moved on a tick: redraw the scene and its shadows
+    looks: false, // only a surface changed (a tracing, a glow, a screen): redraw, shadows stay
 
     // Call once per animation frame with the seconds since the last one.
     update(dt) {
@@ -25,11 +26,14 @@ export function createStepped() {
     },
 
     // Run fn(frame) on every nth tick, forever. Return false from fn when
-    // nothing changed, so the scene is not redrawn for no reason.
+    // nothing changed, so the scene is not redrawn for no reason, and 'looks'
+    // when only surfaces changed, so the shadows are not redrawn either.
     every(n, fn) {
       const job = (frame) => {
         if (stepped.reduced || frame % n) return
-        if (fn(frame) !== false) stepped.dirty = true
+        const changed = fn(frame)
+        if (changed === 'looks') stepped.looks = true
+        else if (changed !== false) stepped.dirty = true
       }
       jobs.add(job)
       return () => jobs.delete(job)

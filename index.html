@@ -13,6 +13,8 @@
     <!-- clips and playable builds sit here, behind the canvas, and show through the cut-out screens -->
     <div id="stage"></div>
     <canvas id="scene" aria-hidden="true"></canvas>
+    <!-- with motion off, a quick fade through paper covers each camera cut -->
+    <div id="veil" aria-hidden="true"></div>
 
     <header class="masthead">
       <h1 class="hand">{{name}}</h1>
@@ -28,7 +30,10 @@
       <article id="card" hidden></article>
     </main>
 
-    <button id="motion" class="pencil-button" type="button"></button>
+    <div class="switches">
+      <button id="motion" class="pencil-button" type="button"></button>
+      <button id="sound" class="pencil-button" type="button" aria-pressed="false"></button>
+    </div>
     <p id="status" class="sr-only" role="status"></p>
     <noscript>
       <p class="noscript">{{noscript}} <a href="list.html">{{list}}</a>.</p>

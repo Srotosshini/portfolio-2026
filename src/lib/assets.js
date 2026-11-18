@@ -42,8 +42,39 @@ export async function art(stem, placeholder, { edge = 5, tracings = 2 } = {}) {
       console.warn(error.message, '- using the placeholder')
     }
   }
-  if (!sources) sources = Array.from({ length: tracings }, (_, i) => placeholder(i + 1))
-  return sources.map((source) => prepCutout(source, { edge }))
+  if (!sources) {
+    sources = []
+    for (let i = 0; i < tracings; i++) {
+      await turn()
+      sources.push(placeholder(i + 1))
+    }
+  }
+  const preps = []
+  for (const source of sources) {
+    await turn()
+    preps.push(prepCutout(source, { edge }))
+  }
+  return preps
+}
+
+// Drawing a stand-in or cutting out a drawing is slow work. It is done one
+// piece per animation frame, so a camera glide keeps moving while a room is
+// being made, instead of freezing and then jumping to the end.
+const waiting = []
+let pumping = false
+function pump() {
+  waiting.shift()?.()
+  if (waiting.length) requestAnimationFrame(pump)
+  else pumping = false
+}
+export function turn() {
+  return new Promise((resolve) => {
+    waiting.push(resolve)
+    if (!pumping) {
+      pumping = true
+      requestAnimationFrame(pump)
+    }
+  })
 }
 
 // A material slot: the first of her scans that exists (textures/<name>.jpg,

@@ -756,6 +756,86 @@ export function photoCard(index) {
   return c
 }
 
+// ------------------------------------------------------------------ creative coding
+
+// Pinholes: bright points with a soft halo on black. Laid over the dark box's
+// walls as a glow, so they shine even with the lights down.
+export function pinholes() {
+  const c = canvas(1024, 1024)
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, 1024, 1024)
+  const r = rng(606)
+  for (let i = 0; i < 260; i++) {
+    const x = r() * 1024
+    const y = r() * 1024
+    const s = 0.7 + r() * 1.3 // the hole itself: a needle prick
+    const g = ctx.createRadialGradient(x, y, 0, x, y, s * 4)
+    g.addColorStop(0, 'rgba(255, 250, 232, 1)')
+    g.addColorStop(0.25, 'rgba(255, 238, 200, 0.8)')
+    g.addColorStop(1, 'rgba(255, 220, 160, 0)')
+    ctx.fillStyle = g
+    ctx.fillRect(x - s * 4, y - s * 4, s * 8, s * 8)
+  }
+  return c
+}
+
+// a folded-paper piano key: white paper with its fold, or a black card one
+export function pianoKey(white, seed = 1) {
+  const c = canvas(white ? 200 : 120, white ? 330 : 420)
+  const ctx = c.getContext('2d')
+  const { width: W, height: H } = c
+  const m = marker(ctx, seed, { width: white ? 6 : 4 })
+  m.shape([[12, 10], [W - 12, 14], [W - 10, H - 12], [10, H - 10]], white ? P.paper : P.blackCard, white ? {} : { color: '#4a4a5c' })
+  if (white) {
+    m.line([[18, 70], [W - 18, 74]], { width: 3, color: P.pencil }) // the fold
+    ctx.fillStyle = 'rgba(80, 70, 50, 0.08)'
+    ctx.fillRect(16, 74, W - 32, 18)
+  } else {
+    m.line([[24, 30], [W - 26, 32]], { width: 3, color: '#6a6a80' }) // a glint along the top
+  }
+  fibres(ctx)
+  return c
+}
+
+// the toy piano's body, standing behind the keys
+export function pianoBody(seed = 1) {
+  const c = canvas(1000, 250)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed)
+  m.shape([[20, 60], [60, 18], [940, 14], [982, 58], [984, 236], [16, 240]], P.paper)
+  m.highlight([[40, 66], [960, 62], [962, 104], [38, 108]], P.periwinkle, 22)
+  m.line([[30, 112], [970, 108]], { width: 4 })
+  m.shape(star(110, 40, 14), null, { width: 3 })
+  m.shape(star(890, 38, 14), null, { width: 3 })
+  fibres(ctx)
+  return c
+}
+
+// The edge of a window cut in black card: the card's white core showing all
+// round the opening. The opening is the middle 334 × 238 of 400 × 300.
+export function windowFrame(seed = 1) {
+  const c = canvas(400, 300)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 3, wobble: 1.2 })
+  m.shape([[8, 10], [392, 6], [394, 292], [6, 294]], P.blackCard, { color: '#26262e', width: 2 })
+  m.shape([[25, 25], [375, 21], [377, 277], [23, 281]], P.cut, { stroke: false })
+  m.hole([[33, 31], [367, 29], [369, 269], [31, 271]])
+  return c
+}
+
+// the flap that covers a window, with a pull tab in its sketch's colour
+export function windowFlap(tint, seed = 1) {
+  const c = canvas(360, 270)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 4, wobble: 1.3 })
+  m.shape([[6, 8], [354, 4], [356, 250], [4, 254]], P.blackCard, { color: '#4a4a5c' })
+  m.shape([[150, 236], [210, 234], [214, 266], [146, 266]], P.paper)
+  m.highlight([[152, 238], [208, 236], [210, 262], [150, 262]], tint, 12)
+  fibres(ctx)
+  return c
+}
+
 // ------------------------------------------------------------------ materials
 
 // A sheet of something: a base colour covered in fibres. Returns the canvas

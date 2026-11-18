@@ -4,9 +4,10 @@ import { site } from './data/projects.js'
 import { createStepped } from './lib/stepped.js'
 import { createRig, FULL } from './lib/camera.js'
 import { createOverlay } from './lib/overlay.js'
-import { boil, PALETTE } from './lib/paper.js'
-import { files, onAssetLoaded } from './lib/assets.js'
+import { boil, PALETTE, unsent } from './lib/paper.js'
+import { files, onAssetLoaded, turn } from './lib/assets.js'
 import { itemExists } from './lib/pages.js'
+import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
 
 // One file per room. A room's code and drawings are only fetched the first
@@ -18,6 +19,7 @@ import { buildShelf } from './shelf.js'
 const ROOMS = {
   games: { load: () => import('./rooms/arcade.js') },
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
+  code: { load: () => import('./rooms/code.js'), whole: true, focus: 0.42, fit: 1.04 },
   about: { load: () => import('./rooms/about.js'), card: true },
 }
 
@@ -41,9 +43,48 @@ async function start() {
   const canvas = document.querySelector('#scene')
   // `alpha` so a clip placed behind the canvas can show through a cut-out screen
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+  // Checking every new shader for errors makes the page wait for each one to
+  // finish compiling. Useful while working on the site, a stall on the live one.
+  renderer.debug.checkShaderErrors = import.meta.env.DEV
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
+  // Shadows only change when something in the scene moves, never when only
+  // the camera does, so they are redrawn on demand (see `shadowsStale`).
+  renderer.shadowMap.autoUpdate = false
+
+  // How sharp the picture is. A slow graphics chip lowers it, a step at a
+  // time, whenever camera moves start dropping frames, so the glide stays a
+  // glide. The level it settles on is remembered for the next visit.
+  const quality = {
+    best: Math.min(devicePixelRatio, 1.5),
+    ratio: 1,
+    slow: 0,
+    set(ratio) {
+      quality.ratio = ratio
+      renderer.setPixelRatio(ratio)
+      renderer.setSize(innerWidth, innerHeight, false)
+    },
+    // judged only on frames drawn back to back while the camera moves; a
+    // frame over 400 ms is a paused or hidden tab, not a slow chip
+    sample(frameMs) {
+      if (frameMs > 400) return
+      quality.slow = frameMs > 42 ? quality.slow + 1 : Math.max(0, quality.slow - 1)
+      if (quality.slow < 6 || quality.ratio <= 0.6) return
+      quality.slow = 0
+      quality.set(Math.max(0.6, quality.ratio * 0.75))
+      try {
+        localStorage.setItem('detail', String(quality.ratio))
+      } catch {}
+    },
+  }
+  const remembered = (() => {
+    try {
+      return parseFloat(localStorage.getItem('detail'))
+    } catch {
+      return NaN
+    }
+  })()
+  quality.set(remembered > 0 ? Math.min(remembered, quality.best) : quality.best)
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(PALETTE.paper)
@@ -56,7 +97,7 @@ async function start() {
   const fill = new THREE.HemisphereLight(new THREE.Color(1, 0.97, 0.92), new THREE.Color(0.72, 0.76, 1), FILL)
   const lamp = new THREE.DirectionalLight(new THREE.Color(1, 0.95, 0.86), LAMP)
   lamp.castShadow = true
-  lamp.shadow.mapSize.setScalar(Math.min(innerWidth, innerHeight) < 600 ? 1536 : 2048)
+  lamp.shadow.mapSize.setScalar(1536)
   lamp.shadow.bias = -0.0004
   lamp.shadow.normalBias = 0.02
   scene.add(fill, lamp, lamp.target)
@@ -67,7 +108,21 @@ async function start() {
   const ui = site.ui
 
   let draw = true
-  const redraw = () => (draw = true)
+  let shadowsStale = true
+  // something in the scene changed: draw it, shadows included
+  const redraw = () => {
+    draw = true
+    shadowsStale = true
+  }
+
+  // With motion off the camera cuts instead of gliding. A quick fade through
+  // paper makes the cut feel deliberate rather than broken (a fade is not motion).
+  const veilNode = document.querySelector('#veil')
+  const veil = (on) => {
+    if (on && !stepped.reduced) return Promise.resolve()
+    veilNode.classList.toggle('is-on', on) // (lifting it always works, whatever the motion setting)
+    return sleep(on ? 170 : 0)
+  }
   onAssetLoaded(redraw)
 
   // A room can bring the lights down (a coin going in, a slide going into the
@@ -99,11 +154,43 @@ async function start() {
   }
 
   const shelf = await buildShelf({ stepped })
+  unsent.length = 0 // the shelf's own drawings go up with its very first frame
   scene.add(shelf.group)
 
   // ---- where we are -----------------------------------------------------
   const here = { box: null, item: null } // item: a project, or a photograph
   const rooms = new Map()
+  // A room is made the first time it is wanted: as soon as the pointer or
+  // keyboard focus reaches its box, so it is usually ready by the click.
+  // Its shaders are compiled before its first frame, so that frame is quick.
+  const making = new Map()
+  function prepare(id) {
+    if (!making.has(id)) {
+      const box = shelf.boxes.get(id)
+      const before = new Set(box.body.children)
+      const made = ROOMS[id]
+        .load()
+        .then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights }))
+        .then(async (room) => {
+          // Keep the new room out of sight until it can be drawn without a
+          // stall: shaders compiled in the background, drawings already on
+          // the graphics card (sent one per frame).
+          const added = box.body.children.filter((child) => !before.has(child))
+          for (const child of added) child.visible = false
+          await renderer.compileAsync(box.body, rig.camera, scene).catch(() => {})
+          while (unsent.length) {
+            await turn()
+            renderer.initTexture(unsent.shift())
+          }
+          for (const child of added) child.visible = true
+          redraw()
+          return room
+        })
+      made.catch(() => making.delete(id)) // could not load (offline?): try again next time
+      making.set(id, made)
+    }
+    return making.get(id)
+  }
   let busy = false
   let pan = 0 // sideways offset inside a room, on screens too narrow to show it all
   let slack = 0 // how far it can pan either way
@@ -164,6 +251,7 @@ async function start() {
       console.error(error)
     } finally {
       busy = false
+      veil(false) // never leave the page covered, even if a step failed
     }
   }
 
@@ -184,15 +272,14 @@ async function start() {
     shelf.settle() // if the opening is still playing, skip to the end of it
     box.hover(false) // put it down: it was picked up when the pointer arrived
     overlay.cardSize('')
-    const loading = rooms.has(id)
-      ? Promise.resolve(rooms.get(id))
-      : ROOMS[id].load().then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights }))
+    const loading = prepare(id)
     here.box = id
     pan = -Infinity // start at the left end of the room
     rig.lift = ROOM_LIFT
     setPlace('room')
     overlay.say(box.data.label)
     // push in while the room loads; the pieces start standing up just before the camera arrives
+    await veil(true)
     const moving = rig.go(roomRect(box), { region: ROOMS[id].card ? overlay.stageRegion() : FULL, duration: 1.4 })
     let room
     try {
@@ -204,11 +291,13 @@ async function start() {
       setPlace('shelf')
       history.replaceState(null, '', '#/')
       await rig.go(shelf.frame(), { duration: 0.8 })
+      veil(false)
       overlay.showSpots('shelf')
       throw error
     }
     rooms.set(id, room)
     await Promise.all([moving.then(() => aimLamp(box.view())), room.open()])
+    veil(false)
     if (room.card && ROOMS[id].card) await overlay.showCard(room.card())
     else overlay.el.back.focus({ preventScroll: true })
     overlay.showSpots(id)
@@ -219,12 +308,14 @@ async function start() {
     const room = rooms.get(id)
     overlay.showSpots(null)
     if (ROOMS[id].card) await overlay.hideCard()
+    await veil(true)
     await room.close()
     here.box = null
     rig.lift = 0
     setPlace('shelf')
     aimLamp(shelf.frame())
     await rig.go(shelf.frame(), { duration: 1.2 })
+    veil(false)
     overlay.showSpots('shelf')
     shelf.boxes.get(id).spot.node.focus({ preventScroll: true })
   }
@@ -237,7 +328,9 @@ async function start() {
     here.item = id
     setPlace('item')
     overlay.cardSize(ROOMS[here.box].slim ? 'slim' : '')
+    await veil(true)
     await rig.go(room.view(id), { region: overlay.stageRegion(), duration: 1.1 })
+    veil(false)
     await overlay.showCard(room.card(id))
   }
 
@@ -259,7 +352,9 @@ async function start() {
     rig.parallax = 1
     rig.lift = ROOM_LIFT
     setPlace('room')
+    await veil(true)
     await rig.go(roomRect(shelf.boxes.get(here.box)), { duration: 1 })
+    veil(false)
     room.end()
     overlay.showSpots(here.box)
     room.spot(id)?.node.focus({ preventScroll: true })
@@ -277,7 +372,7 @@ async function start() {
       onHover(on) {
         if (busy) return
         box.hover(on)
-        if (on && open) ROOMS[box.id].load().catch(() => {}) // fetch the room while they make up their mind
+        if (on && open) prepare(box.id).catch(() => {}) // make the room while they make up their mind
       },
       onClick() {
         if (open) return goTo(`#/${box.id}`)
@@ -371,6 +466,34 @@ async function start() {
     } catch {}
   })
 
+  // ---- sound (off unless the visitor turns it on) ---------------------------
+  const soundSwitch = document.querySelector('#sound')
+  function setSound(on) {
+    sound.set(on)
+    soundSwitch.textContent = on ? ui.soundIsOn : ui.soundIsOff
+    soundSwitch.setAttribute('aria-pressed', String(on))
+  }
+  setSound((() => {
+    try {
+      return localStorage.getItem('sound') === 'on'
+    } catch {
+      return false
+    }
+  })())
+  soundSwitch.addEventListener('click', () => {
+    setSound(!sound.on)
+    try {
+      localStorage.setItem('sound', sound.on ? 'on' : 'off')
+    } catch {}
+  })
+  // a note was played with the sound off: show where to turn it on
+  sound.hint = () => {
+    soundSwitch.classList.remove('nudge')
+    void soundSwitch.offsetWidth // restart the wave if it is already going
+    soundSwitch.classList.add('nudge')
+  }
+  soundSwitch.addEventListener('animationend', () => soundSwitch.classList.remove('nudge'))
+
   // ---- size ---------------------------------------------------------------
   function resize() {
     const w = innerWidth
@@ -392,22 +515,65 @@ async function start() {
 
   let last = performance.now()
   renderer.setAnimationLoop((now) => {
-    const dt = Math.min(0.25, (now - last) / 1000)
+    const frameMs = now - last
+    const dt = Math.min(0.25, frameMs / 1000)
     last = now
     stepped.update(dt)
-    if (rig.update(dt)) draw = true
-    if (stepped.dirty) draw = true
-    stepped.dirty = false
+    const cameraMoved = rig.update(dt)
+    if (cameraMoved) draw = true
+    if (stepped.dirty) redraw() // paper moved: its shadows move too
+    if (stepped.looks) draw = true
+    stepped.dirty = stepped.looks = false
+    if (cameraMoved && rig.moving) quality.sample(frameMs)
     if (!draw) return // nothing moved: leave the last frame on screen
     draw = false
     scene.updateMatrixWorld()
     rig.camera.updateMatrixWorld()
     overlay.update()
+    if (shadowsStale) renderer.shadowMap.needsUpdate = true
+    shadowsStale = false
     renderer.render(scene, rig.camera)
   })
 
   // Arriving on the plain address plays the opening; a link straight to a box
   // or a project goes straight there.
-  if (wanted().box) settle()
-  else shelf.playIntro()
+  const arrived = wanted().box ? settle() : shelf.playIntro()
+
+  // Once the shelf has settled, in a still moment, compile the kinds of shader
+  // the rooms use (light beams, dust, glows, paper scraps), so the first box
+  // opened does not stop to compile them. No room's drawings are loaded for this.
+  Promise.resolve(arrived).then(() =>
+    setTimeout(() => {
+      const tiny = new THREE.BufferGeometry()
+      tiny.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0.01, 0, 0.01, 0, 0], 3))
+      tiny.setAttribute('color', new THREE.Float32BufferAttribute([1, 1, 1, 1, 1, 1, 1, 1, 1], 3))
+      const blank = new THREE.CanvasTexture(Object.assign(document.createElement('canvas'), { width: 2, height: 2 }))
+      const glow = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }
+      const scraps = new THREE.InstancedMesh(tiny, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), 1)
+      scraps.setColorAt(0, new THREE.Color())
+      scraps.castShadow = scraps.receiveShadow = true
+      const kinds = new THREE.Group()
+      kinds.add(
+        scraps,
+        new THREE.Mesh(tiny, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, ...glow })),
+        new THREE.Mesh(tiny, new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, transparent: true, blending: THREE.NoBlending })),
+        new THREE.Points(tiny, new THREE.PointsMaterial({ map: blank, size: 0.1, ...glow })),
+        new THREE.Sprite(new THREE.SpriteMaterial({ map: blank, ...glow })),
+      )
+      kinds.position.y = -100 // well out of sight
+      scene.add(kinds)
+      renderer
+        .compileAsync(kinds, rig.camera, scene)
+        .catch(() => {})
+        .finally(() => {
+          scene.remove(kinds)
+          kinds.traverse((o) => {
+            if (o.isInstancedMesh) o.dispose()
+            if (!o.isSprite) o.geometry?.dispose() // (sprites share one geometry: leave it)
+            o.material?.dispose()
+          })
+          blank.dispose()
+        })
+    }, 400),
+  )
 }

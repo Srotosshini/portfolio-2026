@@ -47,6 +47,9 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `projector` | photography: the slide projector, lens pointing right |
 | `screen` | photography: the paper sheet the photos are projected onto (one tracing is enough) |
 | `photo-corners` | photography: four photo corners on a transparent sheet, laid over every print |
+| `key-white`, `key-black`, `piano` | creative coding: one paper piano key of each kind, and the toy piano's body |
+| `window-frame` | creative coding: the cut edge round a window in black card (cut the opening out) |
+| `window-flap-sketch-1` … `window-flap-sketch-5` | creative coding: the flap over each sketch's window |
 | `self-portrait` | About |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
@@ -81,6 +84,10 @@ Game names in file names: `snikisnak`, `patchwork`, `duckie`, `park`, `jam`, `sp
 
 Photos need no list. To give one a caption (and a description for people using screen readers), add it under `photos` in `src/data/projects.js`, by file name without the extension.
 
+**Sketches** (creative coding) each have an entry in `src/data/projects.js`. Put the sketch's web address in `build`: for a p5.js sketch, its `https://editor.p5js.org/<you>/full/<id>` link, or a folder of your own in `public/` such as `sketches/flock/index.html`. It then runs live behind its window; until then a stand-in runs there. In the dark box the piano can also be played from a computer keyboard: A S D F G H J K for the white keys, W E T Y U for the black ones.
+
+**Sound** is off until a visitor turns it on with the switch in the bottom-left corner. For now it is only the piano.
+
 ## Writing
 
 All text is in one file: [src/data/projects.js](src/data/projects.js). Anything that starts with `TODO:` is a placeholder and shows up in grey pencil on the site. Replace the whole string with your own words.
@@ -98,7 +105,9 @@ index.html            the shelf
 list.html             the plain list (baked at build time, works without JavaScript)
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
-src/rooms/            one file per room (arcade.js, photography.js, about.js)
+src/rooms/            one file per room (arcade.js, photography.js, code.js, about.js)
+src/lib/sketches.js   stand-in live sketches for the dark box; nothing here should survive
+src/lib/sound.js      the sound switch's sound: the piano's notes
 src/lib/paper.js      cutout, tab, shadow, pop-up, line boil
 src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the floor
 src/lib/stepped.js    the 12 fps stop-motion clock

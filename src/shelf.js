@@ -15,10 +15,10 @@ const TILE = 6 // a scanned sheet covers this much before it repeats
 // Everything in a box folds forward to lie flat, so a box's depth is also the
 // tallest thing that can stand in it.
 const SIZES = {
-  games: [6.6, 3.2, 2.6],
+  games: [7.2, 3.2, 2.6],
   about: [3.3, 2.4, 1.7],
   photography: [5.0, 3.0, 2.2],
-  code: [3.8, 2.35, 1.6],
+  code: [4.6, 2.6, 1.9],
   design: [5.0, 2.1, 1.6],
   research: [4.0, 2.3, 1.6],
 }
@@ -31,7 +31,7 @@ const LINING = {
   games: { scan: 'black-card', draw: 'black' },
   about: { draw: 'periwinkle' },
   photography: { scan: 'velvet', draw: 'velvet' },
-  code: { scan: 'black-card', draw: 'pinholes' },
+  code: { scan: 'black-card', draw: 'black', glow: 'pinholes' }, // pinholes shine through, lights or no lights
   design: { scan: 'cutting-mat', draw: 'mat' },
   research: { scan: 'manila', draw: 'manila' },
 }
@@ -45,7 +45,7 @@ const LAYOUTS = {
     width: 13,
     rows: [
       [['photography', -3.2], ['code', 3.0]],
-      [['games', -2.35], ['about', 4.3]],
+      [['games', -2.65], ['about', 4.3]],
       [['design', -2.9], ['research', 3.6]],
     ],
     details: [['jar', 1, 1.82, -1.3], ['roll', 0, 0.2, -1.0]],
@@ -54,7 +54,7 @@ const LAYOUTS = {
     width: 7.4,
     rows: [
       [['photography', -1.1]],
-      [['code', 1.5]],
+      [['code', 1.2]],
       [['games', 0]],
       [['about', -1.75]],
       [['design', 0.9]],
@@ -135,6 +135,16 @@ export async function buildShelf({ stepped }) {
     const inside = new THREE.MeshLambertMaterial({
       map: scan([`lining-${data.id}`, lining.scan], () => sketch.lining(lining.draw)),
     })
+    // Light coming through holes in the card: a glow laid over the walls that
+    // shines whatever the room's lights are doing. `glow.set(k)` flares it.
+    let glow = null
+    if (lining.glow) {
+      const map = texture(sketch[lining.glow]())
+      map.wrapS = map.wrapT = THREE.MirroredRepeatWrapping
+      inside.emissiveMap = map
+      inside.emissive.set('#fff1cf')
+      glow = { set: (k) => (inside.emissiveIntensity = k) }
+    }
     // the back wall can carry a drawing of its own, shown whole
     const drawnBack = has(`back-${data.id}`)
     const backWall = drawnBack
@@ -230,7 +240,7 @@ export async function buildShelf({ stepped }) {
     let hovered = false
 
     boxes.set(data.id, {
-      id: data.id, data, group: box, body, tapes, neon, ground, w, h, d,
+      id: data.id, data, group: box, body, tapes, neon, ground, glow, w, h, d,
       // where things stand inside: floor height, back wall, usable width and height
       inner: { w: w - 2 * T, h: h - 2 * T, floor: T, back: -d + T },
       // corners of the opening in world space, for the hotspot button
@@ -454,9 +464,13 @@ export async function buildShelf({ stepped }) {
   if (sign) {
     stepped.every(1, () => {
       if (sign.level === 0) return false
-      if (dip.length) return void sign.set(dip.shift())
+      if (dip.length) {
+        sign.set(dip.shift())
+        return 'looks' // the tubes cast no shadow
+      }
       if (rand() > 0.025) return false
       dip = [0.45, 1, 0.7, 1]
+      return false
     })
   }
 
