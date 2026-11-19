@@ -7,6 +7,7 @@ import { createOverlay } from './lib/overlay.js'
 import { boil, PALETTE, unsent } from './lib/paper.js'
 import { files, onAssetLoaded, turn } from './lib/assets.js'
 import { itemExists } from './lib/pages.js'
+import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
 
 // One file per room. A room's code and drawings are only fetched the first
@@ -15,11 +16,13 @@ import { buildShelf } from './shelf.js'
 //   whole: always frame the whole room; it uses sideways drags itself
 //   slim: its pages are caption slips, not full project cards
 //   focus, fit: how the camera frames the room (see box.view in shelf.js)
-//   bare: an opened item has no side card; the room shows its own buttons
+//   narrow: on a tall screen, how much of a whole room's width stays in view
+//   inPlace: an opened item is held up over the room by the room itself (a
+//            trading card); the camera stays where it is
 const ROOMS = {
   games: { load: () => import('./rooms/arcade.js') },
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
-  'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, bare: true, focus: 0.5, fit: 1.04 },
+  'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
   about: { load: () => import('./rooms/about.js'), card: true },
 }
 
@@ -46,7 +49,7 @@ async function start() {
   // Checking every new shader for errors makes the page wait for each one to
   // finish compiling. Useful while working on the site, a stall on the live one.
   renderer.debug.checkShaderErrors = import.meta.env.DEV
-  renderer.localClippingEnabled = true // the gallery corridor only shows between its box's walls
+  renderer.localClippingEnabled = true // the display case's cellophane slides up into its frame
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFShadowMap
   // Shadows only change when something in the scene moves, never when only
@@ -159,7 +162,7 @@ async function start() {
   scene.add(shelf.group)
 
   // ---- where we are -----------------------------------------------------
-  const here = { box: null, item: null } // item: a project, or a photograph
+  const here = { box: null, item: null, look: null } // item: a project, a photograph, a card; look: see look()
   const rooms = new Map()
   // A room is made the first time it is wanted: as soon as the pointer or
   // keyboard focus reaches its box, so it is usually ready by the click.
@@ -171,7 +174,7 @@ async function start() {
       const before = new Set(box.body.children)
       const made = ROOMS[id]
         .load()
-        .then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights }))
+        .then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights, look, camera: rig.camera }))
         .then(async (room) => {
           // Keep the new room out of sight until it can be drawn without a
           // stall: shaders compiled in the background, drawings already on
@@ -202,7 +205,7 @@ async function start() {
     const full = box.view(ROOMS[box.id].focus, ROOMS[box.id].fit)
     // a room that cannot pan is still allowed to crop its own side walls on a tall screen
     const w = ROOMS[box.id].whole
-      ? full.w * (innerWidth < innerHeight ? 0.8 : 1)
+      ? full.w * (innerWidth < innerHeight ? (ROOMS[box.id].narrow ?? 0.8) : 1)
       : Math.min(full.w, Math.max(innerWidth / 108, full.h * rig.camera.aspect))
     slack = ROOMS[box.id].whole ? 0 : (full.w - w) / 2
     pan = THREE.MathUtils.clamp(pan, -slack, slack)
@@ -210,15 +213,29 @@ async function start() {
   }
 
   function viewNow() {
-    if (!here.box) return { rect: shelf.frame(), region: FULL }
+    if (!here.box) return { rect: shelf.frame(), region: FULL, lift: 0 }
     const room = rooms.get(here.box)
-    if (here.item && room) return { rect: room.view(here.item), region: ROOMS[here.box].bare ? FULL : overlay.stageRegion() }
-    return { rect: roomRect(shelf.boxes.get(here.box)), region: ROOMS[here.box].card ? overlay.stageRegion() : FULL }
+    const conf = ROOMS[here.box]
+    if (here.item && room && !conf.inPlace) return { rect: room.view(here.item), region: overlay.stageRegion(), lift: 0 }
+    if (here.look) return { rect: here.look.rect(), region: FULL, lift: here.look.lift }
+    return { rect: roomRect(shelf.boxes.get(here.box)), region: conf.card ? overlay.stageRegion() : FULL, lift: ROOM_LIFT }
   }
 
   const refit = () => {
     const view = viewNow()
-    rig.go(view.rect, { region: view.region, instant: true })
+    rig.go(view.rect, { region: view.region, instant: true, lift: view.lift })
+  }
+
+  // A room can point the camera at part of itself, from its own angle: the
+  // card shop looks down onto its counter. `rect` is a function, so a resize
+  // asks again; null goes back to the room's usual view.
+  async function look(rect, { lift = ROOM_LIFT, duration = 1.1 } = {}) {
+    here.look = rect ? { rect, lift } : null
+    const view = viewNow()
+    await veil(true)
+    await rig.go(view.rect, { region: view.region, duration, lift: view.lift })
+    aimLamp(view.rect)
+    veil(false)
   }
 
   // ---- routes: #/games, #/games/snikisnak, #/photography/03, #/about ---------
@@ -275,23 +292,22 @@ async function start() {
     overlay.cardSize('')
     const loading = prepare(id)
     here.box = id
+    here.look = null
     pan = -Infinity // start at the left end of the room
-    rig.lift = ROOM_LIFT
     setPlace('room')
     overlay.say(box.data.label)
     // push in while the room loads; the pieces start standing up just before the camera arrives
     await veil(true)
-    const moving = rig.go(roomRect(box), { region: ROOMS[id].card ? overlay.stageRegion() : FULL, duration: 1.4 })
+    const moving = rig.go(roomRect(box), { region: ROOMS[id].card ? overlay.stageRegion() : FULL, duration: 1.4, lift: ROOM_LIFT })
     let room
     try {
       ;[room] = await Promise.all([loading, stepped.reduced ? null : sleep(850)])
     } catch (error) {
       // the room would not load (offline, say): back out to the shelf rather than strand the camera
       here.box = null
-      rig.lift = 0
       setPlace('shelf')
       history.replaceState(null, '', '#/')
-      await rig.go(shelf.frame(), { duration: 0.8 })
+      await rig.go(shelf.frame(), { duration: 0.8, lift: 0 })
       veil(false)
       overlay.showSpots('shelf')
       throw error
@@ -312,10 +328,11 @@ async function start() {
     await veil(true)
     await room.close()
     here.box = null
-    rig.lift = 0
+    here.look = null
+    rig.parallax = 1
     setPlace('shelf')
     aimLamp(shelf.frame())
-    await rig.go(shelf.frame(), { duration: 1.2 })
+    await rig.go(shelf.frame(), { duration: 1.2, lift: 0 })
     veil(false)
     overlay.showSpots('shelf')
     shelf.boxes.get(id).spot.node.focus({ preventScroll: true })
@@ -324,17 +341,22 @@ async function start() {
   async function openItem(id) {
     const room = rooms.get(here.box)
     overlay.showSpots(null)
+    if (ROOMS[here.box].inPlace) {
+      // held up over the room (a card from the counter or the binder)
+      here.item = id
+      setPlace('item')
+      await room.show(id)
+      return
+    }
     await room.start(id) // the coin drops, or the slide goes into the projector
-    rig.parallax = rig.lift = 0 // square on and still, so a clip lines up with its screen
+    rig.parallax = 0 // square on and still, so a clip lines up with its screen
     here.item = id
     setPlace('item')
     overlay.cardSize(ROOMS[here.box].slim ? 'slim' : '')
-    const bare = ROOMS[here.box].bare
     await veil(true)
-    await rig.go(room.view(id), { region: bare ? FULL : overlay.stageRegion(), duration: 1.1 })
+    await rig.go(room.view(id), { region: overlay.stageRegion(), duration: 1.1, lift: 0 })
     veil(false)
-    if (bare) room.show(id)
-    else await overlay.showCard(room.card(id))
+    await overlay.showCard(room.card(id))
   }
 
   // straight from one item to the next without backing out (photo to photo)
@@ -350,14 +372,20 @@ async function start() {
   async function closeItem() {
     const id = here.item
     const room = rooms.get(here.box)
-    if (ROOMS[here.box].bare) room.hide()
-    else await overlay.hideCard()
+    if (ROOMS[here.box].inPlace) {
+      await room.hide()
+      here.item = null
+      setPlace('room')
+      room.end()
+      overlay.showSpots(here.box)
+      return
+    }
+    await overlay.hideCard()
     here.item = null
     rig.parallax = 1
-    rig.lift = ROOM_LIFT
     setPlace('room')
     await veil(true)
-    await rig.go(roomRect(shelf.boxes.get(here.box)), { duration: 1 })
+    await rig.go(roomRect(shelf.boxes.get(here.box)), { duration: 1, lift: ROOM_LIFT })
     veil(false)
     room.end()
     overlay.showSpots(here.box)
@@ -386,7 +414,12 @@ async function start() {
     })
   }
 
-  const stepBack = () => goTo(here.item ? `#/${here.box}` : '#/')
+  // Back one step. A room can take the step itself first (the card shop: out
+  // of its binder, or from the counter back to the case).
+  const stepBack = () => {
+    if (here.box && !here.item && rooms.get(here.box)?.escape?.()) return
+    goTo(here.item ? `#/${here.box}` : '#/')
+  }
   overlay.el.back.addEventListener('click', stepBack)
   addEventListener('keydown', (e) => {
     if (!here.box || busy) return
@@ -401,7 +434,7 @@ async function start() {
   let drag = null
   addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') rig.point((e.clientX / innerWidth) * 2 - 1, 1 - (e.clientY / innerHeight) * 2)
-    if (here.box && !here.item) rooms.get(here.box)?.pointer?.(e.clientX / innerWidth) // the gallery's doodle follows it
+    if (here.box && !here.item) rooms.get(here.box)?.pointer?.(e.clientX / innerWidth) // foil catches the light as it moves
     if (!drag) return
     if (!drag.moved && Math.abs(e.clientX - drag.x) < 8) return
     if (!drag.moved) document.body.classList.add('is-dragging')
@@ -471,6 +504,30 @@ async function start() {
     } catch {}
   })
 
+  // ---- sound (off unless the visitor turns it on) ---------------------------
+  const soundSwitch = document.querySelector('#sound')
+  function setSound(on) {
+    sound.set(on)
+    soundSwitch.textContent = on ? ui.soundIsOn : ui.soundIsOff
+    soundSwitch.setAttribute('aria-pressed', String(on))
+  }
+  setSound(
+    (() => {
+      try {
+        return localStorage.getItem('sound') === 'on'
+      } catch {
+        return false
+      }
+    })(),
+  )
+  soundSwitch.addEventListener('click', () => {
+    setSound(!sound.on)
+    sound.warm()
+    try {
+      localStorage.setItem('sound', sound.on ? 'on' : 'off')
+    } catch {}
+  })
+
   // ---- size ---------------------------------------------------------------
   function resize() {
     const w = innerWidth
@@ -498,7 +555,7 @@ async function start() {
     stepped.update(dt)
     const cameraMoved = rig.update(dt)
     if (cameraMoved) draw = true
-    // a room that moves smoothly every frame (walking the gallery); no shadows change
+    // a room with things that follow the camera every frame (the card shop's cards, which are HTML)
     if (here.box && rooms.get(here.box)?.frame?.(dt)) draw = true
     if (stepped.dirty) redraw() // paper moved: its shadows move too
     if (stepped.looks) draw = true

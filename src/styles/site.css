@@ -282,7 +282,7 @@ body.is-dragging .hotspot {
   left: 1.25rem;
 }
 
-/* A scrap of paper with a pencil note: the switch that stops all the motion. */
+/* Scraps of paper with pencil notes: the switches for motion and sound. */
 .switches {
   position: fixed;
   z-index: 3; /* under the card, so they never sit on top of a project page */
@@ -306,6 +306,9 @@ body.is-dragging .hotspot {
 }
 .pencil-button + .pencil-button {
   transform: rotate(-1.2deg);
+}
+.pencil-button[aria-pressed='true'] {
+  color: var(--navy);
 }
 .noscript {
   position: fixed;
@@ -569,252 +572,676 @@ body[data-card='slim'] .card-paper {
   margin: 1.1rem 0 0;
 }
 
-/* ------------------------------------------------------------- the gallery */
+/* ---------------------------------------------------------- the card shop */
 
-body[data-room='creative-coding'][data-place='room'] {
-  cursor: grab;
-}
-/* an opened painting has its own way back, on the frame */
-body[data-room='creative-coding'][data-place='item'] #back {
+/* a card held up big, and the binder, have their own ways back */
+body[data-room='creative-coding'][data-place='item'] #back,
+body.binder-open #back {
   display: none;
 }
+/* the pack on the counter is torn open by dragging along its top */
+.rip-spot {
+  cursor: grab;
+}
 
-/* The timeline: a strip of film negative across the top, a frame for every
-   sketch, newest on the left. */
-.filmstrip {
+/* The cards out on the counter: HTML laid over the scene, each one mapped
+   onto its four corners on screen (see trading-cards.js). */
+.shop-layer {
   position: fixed;
-  z-index: 5;
-  top: 0.9rem;
-  left: 50%;
-  display: flex;
-  gap: 6px;
-  max-width: min(calc(100vw - 31rem), 54rem);
-  padding: 13px 9px;
-  overflow-x: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  background:
-    repeating-linear-gradient(90deg, var(--paper) 0 6px, transparent 6px 13px) left 4px / 100% 5px no-repeat,
-    repeating-linear-gradient(90deg, var(--paper) 0 6px, transparent 6px 13px) left calc(100% - 4px) / 100% 5px no-repeat,
-    #1e1d22;
-  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.3), 2px 4px 6px rgba(40, 28, 10, 0.25);
-  transform: translateX(-50%) rotate(-0.5deg);
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+  --cw: 315px;
+  --ch: 440px;
 }
-.filmstrip button {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 42px;
-  padding: 0;
-  border: 2px solid #3b3a42;
-  background: #111;
+.shop-layer.is-up {
+  z-index: 7; /* a card held up big goes over everything */
+}
+
+.tcard {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--cw);
+  height: var(--ch);
+  transform-origin: 0 0;
+  font-size: calc(var(--cw) / 15);
+  line-height: 1.2;
+  border-radius: 5.4% / 3.9%;
+  pointer-events: auto;
   cursor: pointer;
+  transition: opacity 0.35s linear;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.filmstrip button > * {
+.tcard.is-big {
+  cursor: default;
+}
+.tcard.is-arriving {
+  opacity: 0;
+}
+.tcard:focus-visible {
+  outline: 0.12em dashed var(--paper);
+  outline-offset: 0.15em;
+  box-shadow: 0 0 0 0.25em var(--navy);
+}
+.tcard-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #fcf8ee center / 100% 100% no-repeat;
+  box-shadow: 0 0.04em 0 rgba(40, 28, 10, 0.35), 0.1em 0.28em 0.4em rgba(25, 18, 8, 0.32);
+}
+.tcard-back {
+  display: none;
+  background-color: var(--navy);
+}
+.tcard.is-back .tcard-front {
+  display: none;
+}
+.tcard.is-back .tcard-back {
+  display: block;
+}
+
+.tcard-front > * {
+  position: absolute;
+  margin: 0;
+}
+.tcard-title {
+  display: flex;
+  align-items: center;
+  padding: 0 0.25em;
+  color: var(--navy);
+  font-size: 1.02em;
+  line-height: 1;
+}
+.tcard-title span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tcard-pic {
+  z-index: 1; /* over the foil: the clip itself stays clear */
+  overflow: hidden;
+  background: #16161c;
+}
+/* a faint shimmer over the picture on a holographic card */
+.tcard[data-finish='holo'] .tcard-pic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 150, 220, 0.4) 42%, rgba(150, 230, 255, 0.4) 54%, transparent 66%) var(--px, 50%) var(--py, 50%) / 300% 300%;
+  mix-blend-mode: screen;
+  opacity: 0.45;
+  pointer-events: none;
+}
+.tcard-pic > video,
+.tcard-pic > img,
+.tcard-pic > canvas {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.filmstrip button[aria-current] {
-  border-color: var(--tape);
+.tcard-play {
+  position: absolute;
+  z-index: 2;
+  right: 0.35em;
+  bottom: 0.35em;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.15em 0.6em;
+  border: 0;
+  background: var(--card);
+  color: var(--navy);
+  font-size: 0.62em;
+  cursor: pointer;
+  clip-path: polygon(0 6%, 98% 0, 100% 94%, 3% 100%);
+}
+.tcard:not(.is-big) .tcard-play {
+  display: none;
+}
+.tcard-uses {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0 0.15em;
+  list-style: none;
+}
+.tcard-uses li {
+  display: flex;
+  align-items: center;
+  gap: 0.12em;
+  color: var(--navy);
+  font: 600 0.62em/1 var(--hand);
+}
+.tcard-uses canvas {
+  width: 2.2em;
+  height: 2.2em;
+}
+.tcard-stats {
+  overflow: hidden;
+  padding: 0.15em 0.25em;
+  color: #3b3f57;
+  font-size: 0.64em;
+  line-height: 1.3;
+}
+.tcard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.3em;
+  color: var(--pencil);
+  font-size: 0.6em;
 }
 
-/* everything over an opened painting */
-.gallery-ui {
-  position: fixed;
+/* The finishes: holographic foil whose rainbow follows the pointer, a soft
+   shine on gloss, nothing on matte (its wear is in the drawing). */
+.tcard-sheen {
   inset: 0;
-  z-index: 4;
+  border-radius: inherit;
   pointer-events: none;
 }
-.gallery-ui > * {
+.tcard[data-finish='holo'] .tcard-sheen,
+.tcard.is-sweep .tcard-sheen {
+  display: block;
+  background:
+    linear-gradient(
+        115deg,
+        transparent 20%,
+        rgba(255, 105, 200, 0.55) 31%,
+        rgba(255, 220, 110, 0.55) 39%,
+        rgba(120, 250, 190, 0.55) 47%,
+        rgba(110, 200, 255, 0.55) 55%,
+        rgba(190, 140, 255, 0.55) 63%,
+        transparent 74%
+      )
+      var(--px, 50%) var(--py, 50%) / 300% 300%,
+    repeating-linear-gradient(55deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 7px);
+  mix-blend-mode: color-dodge;
+  opacity: 0.62;
+}
+.tcard[data-finish='glossy'] .tcard-sheen {
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.55) 48%, transparent 58%) var(--px, 30%) var(--py, 30%) / 260% 260%;
+  mix-blend-mode: soft-light;
+}
+.tcard[data-finish='matte'] .tcard-sheen,
+.tcard[data-finish='worn'] .tcard-sheen {
+  display: none;
+}
+/* the chase card turning over: the foil shimmers across it once */
+.tcard.is-sweep .tcard-sheen {
+  opacity: 0.85;
+  animation: sweep 0.9s steps(9) both;
+}
+@keyframes sweep {
+  from {
+    background-position: 0% 0%, 0 0;
+  }
+  to {
+    background-position: 100% 100%, 0 0;
+  }
+}
+/* face down, before it turns: foil glinting round its edge */
+.tcard.is-glow::before {
+  content: '';
+  position: absolute;
+  inset: -3.5% -4.5%;
+  border-radius: 8% / 6%;
+  background: linear-gradient(90deg, #ff92d2, #ffd27e, #fff39c, #a2f5c8, #90d8ff, #bba4ff, #ff92d2, #ffd27e) 0 0 / 300% 100%;
+  animation: foil 1s steps(6) infinite;
+}
+@keyframes foil {
+  to {
+    background-position: 150% 0;
+  }
+}
+.tcard-spark {
+  position: absolute;
+  width: 1.2em;
+  height: 1.2em;
+  margin: -0.6em 0 0 -0.6em;
+  background: #fff6b0;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  pointer-events: none;
+  animation: spark 0.75s steps(5) both;
+}
+@keyframes spark {
+  0% {
+    transform: scale(0) rotate(0deg);
+  }
+  40% {
+    transform: scale(1.3) rotate(30deg);
+  }
+  100% {
+    transform: scale(0) rotate(70deg);
+  }
+}
+
+/* the back of a card held up big: what it is, what she learned */
+.tcard-about {
+  display: none;
+}
+.tcard.is-big .tcard-about {
+  position: absolute;
+  inset: 5% 6%;
+  display: block;
+  overflow: auto;
+  padding: 0.8em 0.9em;
+  border-radius: 3%;
+  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
+  color: var(--navy);
+  font-size: 0.6em;
+  line-height: 1.45;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.tcard-about h3 {
+  margin: 0 0 0.3em;
+  font-size: 1.75em;
+}
+.tcard-about h4 {
+  margin: 1em 0 0.2em;
+  font-size: 1.3em;
+}
+.tcard-about p {
+  margin: 0;
+}
+.tcard-line {
+  font-size: 1.1em;
+}
+.tcard-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15em 0.8em;
+  margin: 0.7em 0 0;
+}
+.tcard-facts div {
+  display: contents;
+}
+.tcard-facts dt {
+  font-size: 1.1em;
+}
+.tcard-facts dd {
+  margin: 0;
+}
+.tcard-process {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6em;
+  margin-top: 0.8em;
+}
+.tcard-process img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 0.3em solid #fff;
+  box-shadow: 0 1px 3px rgba(40, 28, 10, 0.3);
+}
+
+/* round a card held up big: the room dims, and its buttons sit beside it
+   (or under it, on a narrow screen) */
+.card-view {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.card-view-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(18, 21, 44, 0.66);
   pointer-events: auto;
 }
-/* an opened painting's title, taped above its frame */
-.gallery-title {
+.card-view-ui {
   position: absolute;
-  top: 0.9rem;
-  left: 50%;
-  max-width: min(30rem, calc(100vw - 30rem));
-  margin: 0;
-  padding: 0.25rem 1.1rem 0.35rem;
-  background: var(--tape) var(--tex-tape, none) center / cover;
-  font-size: 1.4rem;
-  text-align: center;
-  transform: translateX(-50%) rotate(-1.2deg);
-}
-.gallery-hint {
-  position: absolute;
-  top: 4.2rem;
-  left: 50%;
-  margin: 0;
-  padding: 0.3rem 1rem 0.4rem;
-  background: var(--card);
-  font-size: 1.35rem;
-  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.3), 2px 4px 6px rgba(40, 28, 10, 0.2);
-  opacity: 0;
+  inset: 0;
+  z-index: 61;
   pointer-events: none;
-  transform: translateX(-50%) rotate(-1deg);
-  transition: opacity 0.3s steps(3, end);
 }
-.gallery-hint.is-shown {
-  opacity: 1;
-}
-.gallery-label {
+.card-view-ui > * {
   position: absolute;
-  top: 4.2rem;
-  right: 1.4rem;
-  max-width: 17rem;
-  margin: 0;
-  padding: 0.4rem 0.9rem;
-  background: var(--tape) var(--tex-tape, none) center / cover;
-  font-size: 1.05rem;
-  transform: rotate(2deg);
+  pointer-events: auto;
 }
-.gallery-buttons {
-  position: absolute;
-  left: 50%;
-  bottom: 1.2rem;
+.card-view.is-beside [data-act='back'] {
+  top: var(--top);
+  right: calc(100% - var(--left) + 1.4rem);
+}
+.card-view.is-beside .card-view-try {
+  top: calc(var(--top) + 1.2rem);
+  left: calc(100% - var(--right) + 1.4rem);
+}
+.card-view.is-beside [data-act='flip'] {
+  bottom: var(--bottom);
+  left: calc(100% - var(--right) + 1.4rem);
+}
+.card-view:not(.is-beside) .card-view-ui {
+  inset: auto 0 auto 0;
+  top: calc(100% - var(--bottom) + 0.9rem);
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: center;
-  gap: 0.7rem;
-  width: max-content;
-  max-width: calc(100vw - 2rem);
-  transform: translateX(-50%);
+  gap: 0.6rem;
+  padding: 0 1rem;
 }
-/* a big paper button with its words written on it */
+.card-view:not(.is-beside) .card-view-ui > * {
+  position: static;
+}
+.card-view:not(.is-beside) .card-view-try {
+  order: -1;
+  align-items: center;
+  flex-basis: 100%;
+}
+.card-view-try {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.card-view-needs {
+  color: var(--paper);
+  font-size: 1.05rem;
+}
+.card-view-needs:empty {
+  display: none;
+}
 .paper-button {
+  display: inline-block;
   min-height: 44px;
   padding: 0.35rem 1.1rem 0.45rem;
   border: 0;
   background: var(--card) var(--tex-paper, none) top left / 34rem auto;
   color: var(--navy);
   font-size: 1.15rem;
+  text-decoration: none;
   cursor: pointer;
   clip-path: polygon(0 4%, 99% 0, 100% 96%, 1% 100%);
   box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35);
   transform: rotate(-1deg);
 }
-.paper-button:nth-child(2) {
-  transform: rotate(0.8deg);
-}
 .paper-button:hover {
   background-color: #fff;
   transform: rotate(0deg) translateY(-1px);
 }
-.ask-card {
-  position: absolute;
-  top: 40%;
-  left: 50%;
-  width: min(26rem, calc(100vw - 2rem));
-  padding: 1.1rem 1.4rem 1.3rem;
-  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
-  text-align: center;
-  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35), 3px 8px 10px rgba(40, 28, 10, 0.25);
-  transform: translate(-50%, -50%) rotate(-1deg);
+.paper-button.primary {
+  padding: 0.5rem 1.5rem 0.6rem;
+  background: var(--navy);
+  color: var(--paper);
+  font-size: 1.45rem;
+  transform: rotate(1deg);
 }
-.ask-icon {
-  width: 72px;
-  height: 72px;
+.paper-button.primary:hover {
+  background: #2a3a7a;
 }
-.ask-words {
-  margin: 0.2rem 0;
-  font-size: 1.55rem;
-}
-.ask-question {
-  margin: 0 0 0.9rem;
-  font-size: 1.25rem;
-}
-.ask-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.6rem;
-  margin: 0;
+.paper-button[aria-disabled='true'] {
+  background: #59628c;
+  color: #d9dcea;
+  cursor: default;
 }
 
-/* the back of a painting: its code, on lined paper */
-.code-sheet,
-.learned-note {
-  position: absolute;
+/* the counter's hint and its one button (put away while a card is held up) */
+body[data-place='item'] .shop-ui {
+  visibility: hidden;
+}
+.shop-ui {
+  position: fixed;
   left: 50%;
-  width: min(52rem, calc(100vw - 2rem));
-  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35), 3px 8px 10px rgba(40, 28, 10, 0.25);
+  bottom: 1.1rem;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
   transform: translateX(-50%);
+  pointer-events: none;
 }
-.code-sheet {
-  top: 8vh;
-  height: 68vh;
-  background:
-    linear-gradient(90deg, transparent 2.6rem, rgba(200, 80, 80, 0.35) 2.6rem calc(2.6rem + 1px), transparent calc(2.6rem + 1px)),
-    repeating-linear-gradient(transparent 0 1.45rem, rgba(70, 110, 170, 0.22) 1.45rem calc(1.45rem + 1px)),
-    #fbf8ee;
+.shop-ui > * {
+  pointer-events: auto;
 }
-.code-sheet pre {
-  height: calc(100% - 2.6rem);
+.shop-hint {
   margin: 0;
-  padding: 0.75rem 1rem 1rem 3.2rem;
+  padding: 0.3rem 1rem 0.4rem;
+  background: var(--card);
+  font-size: 1.3rem;
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.3), 2px 4px 6px rgba(40, 28, 10, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: rotate(-1deg);
+  transition: opacity 0.3s steps(3, end);
+}
+.shop-hint.is-shown {
+  opacity: 1;
+}
+.shop-another {
+  font-size: 1.35rem;
+}
+
+/* The binder: a cover page (the count, a tab per pack, the shortcut to
+   everything) and a page of sleeves for the pack that is open. */
+.binder-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
   overflow: auto;
-  font: 0.85rem/1.45rem ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
-  white-space: pre;
+  background: rgba(18, 21, 44, 0.62);
 }
-.code-editor {
-  position: absolute;
-  bottom: 0.55rem;
-  left: 3.2rem;
+.binder {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1fr) 2.4rem minmax(0, 2.2fr);
+  width: min(62rem, 100%);
+  max-height: calc(100vh - 6rem);
+  padding: 0.9rem;
+  border-radius: 10px 14px 12px 9px;
+  background: #34499f;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 4px 10px 18px rgba(0, 0, 0, 0.35);
+  transform: rotate(-0.5deg);
+}
+.binder-cover,
+.binder-page {
+  overflow: auto;
+  padding: 1.2rem 1.3rem;
+  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
+}
+.binder-cover h2 {
   margin: 0;
+  font-size: 2.2rem;
 }
-/* a strip of tape you can pull: flip back, put it back */
-.paper-tab {
-  position: absolute;
-  top: -1rem;
-  right: 1.4rem;
+.binder-count {
+  margin: 0.3rem 0 1rem;
+  font-size: 1.35rem;
+}
+.binder-tabs {
+  display: grid;
+  gap: 0.35rem;
+}
+.binder-tab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
   min-height: 40px;
-  padding: 0.3rem 1rem;
+  padding: 0.35rem 0.75rem;
   border: 0;
   background: var(--tape) var(--tex-tape, none) center / cover;
   color: var(--navy);
-  font-size: 1.05rem;
+  font-size: 1.15rem;
+  text-align: left;
   cursor: pointer;
-  transform: rotate(2deg);
+  transform: rotate(-0.6deg);
 }
-.learned-note {
-  bottom: 5.4rem;
-  max-height: 64vh;
-  padding: 1.6rem 1.6rem 1.2rem;
-  overflow: auto;
-  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
-  transform: translate(-50%, 115%) rotate(-1deg);
-  transition: transform var(--step);
+.binder-tab[aria-current] {
+  background-color: #fff3a6;
+  transform: rotate(0.4deg) translateX(0.45rem);
 }
-.learned-note.is-up {
-  transform: translate(-50%, 0) rotate(-0.6deg);
+.binder-tab small {
+  color: var(--pencil);
+  font: 0.85rem var(--body);
 }
-.learned-note h2 {
-  margin: 0 0 0.6rem;
+.binder-all {
+  margin: 1.3rem 0 0.5rem;
+}
+.binder-list {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.binder-rings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  background: #26377e;
+}
+.binder-rings i {
+  display: block;
+  width: 2.8rem;
+  height: 0.9rem;
+  border-top: 3px solid #f2f4f8;
+  border-radius: 0.45rem;
+  background: #c3c9d6;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+.binder-page h3 {
+  margin: 0 0 0.9rem;
   font-size: 1.6rem;
 }
-.learned-pictures {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.8rem;
+.binder-page.is-turning {
+  transform-origin: left center;
+  animation: page 0.5s steps(5) both;
 }
-.learned-pictures img {
+@keyframes page {
+  from {
+    transform: perspective(60rem) rotateY(-70deg);
+  }
+  to {
+    transform: none;
+  }
+}
+.sleeves {
+  display: grid;
+  /* two rows of sleeves fit the page without scrolling */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: calc((100vh - 17rem) / 2 * 0.716 * 3 + 1.6rem);
+  gap: 0.8rem;
+}
+.sleeve {
+  position: relative;
+  aspect-ratio: 63 / 88;
+  padding: 6%;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(205, 220, 240, 0.5); /* the clear plastic sleeve */
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75), 0 1px 2px rgba(40, 28, 10, 0.25);
+}
+.sleeve.is-empty {
+  display: grid;
+  place-items: center;
+}
+.sleeve.is-empty::before {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border: 2px dashed rgba(29, 42, 91, 0.35);
+  border-radius: 5px;
+}
+.sleeve.is-empty span {
+  color: rgba(29, 42, 91, 0.42);
+  font-size: 2.4rem;
+}
+.sleeve.is-filled {
+  cursor: pointer;
+}
+.sleeve.is-arriving {
+  animation: arrive 0.42s steps(4) both;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(40%) rotate(-6deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mini {
+  position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 5.4% / 3.9%;
+  background: #fcf8ee center / 100% 100% no-repeat;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s steps(3, end);
+}
+.sleeve.is-filled:hover .mini,
+.sleeve.is-filled:focus-visible .mini {
+  transform: translateY(-4px) rotate(-1.5deg);
+}
+.mini-pic {
+  position: absolute;
+  display: block;
   object-fit: cover;
-  border: 5px solid #fff;
-  box-shadow: 0 1px 3px rgba(40, 28, 10, 0.3);
+}
+.mini-title {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  padding: 0 0.3em;
+  color: var(--navy);
+  font-size: clamp(0.55rem, 1.1vw, 0.85rem);
+}
+.mini-title span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.binder-stamp {
+  display: inline-block;
+  margin: 1rem 0 0;
+  padding: 0.15rem 0.8rem 0.25rem;
+  border: 3px solid #b2382f;
+  border-radius: 6px;
+  color: #b2382f;
+  font-size: 1.45rem;
+  transform: rotate(-6deg);
+}
+.binder-lost {
+  display: inline-block;
+  margin: 1rem 0 0;
+  padding: 0.35rem 1rem;
+  background: var(--tape) var(--tex-tape, none) center / cover;
+  font-size: 1.3rem;
+  transform: rotate(-2deg);
 }
 
-/* the sketches in the list */
+/* the sketches in the list, a section per pack */
+.room > .set > h3 {
+  margin: 1.8rem 0 0.7rem;
+  font-size: 1.45rem;
+}
 .sketch-card:has(.sketch-loop) {
   display: grid;
   grid-template-columns: 11rem 1fr;
   gap: 1.1rem;
   align-items: start;
+}
+.sketch-card h4 {
+  margin: 0 0 0.2rem;
+  font-size: 1.35rem;
 }
 .sketch-loop {
   display: block;
@@ -830,23 +1257,44 @@ body[data-room='creative-coding'][data-place='item'] #back {
 }
 
 @media (max-aspect-ratio: 1/1) {
-  .filmstrip {
-    top: 5.7rem;
-    left: 0.6rem;
-    right: 0.6rem;
-    max-width: none;
-    transform: rotate(-0.5deg);
+  .binder {
+    grid-template-columns: 1fr;
+    max-height: none;
   }
-  .gallery-title {
-    top: 5.4rem;
-    max-width: calc(100vw - 2rem);
+  .binder-wrap {
+    align-content: start;
   }
-  /* on a narrow screen the frame's buttons need the bottom edge to themselves */
-  body[data-room='creative-coding'][data-place='item'] .switches {
-    display: none;
+  .binder-rings {
+    flex-direction: row;
+    height: 2rem;
   }
-  .gallery-hint {
-    top: 8.4rem;
+  /* the pack tabs become a row of slips that scrolls sideways */
+  .binder-tabs {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding: 0.2rem 0.2rem 0.5rem;
+    scrollbar-width: none;
+  }
+  .binder-tab {
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 0;
+    transform: none;
+  }
+  .binder-tab[aria-current] {
+    transform: translateY(-0.2rem);
+  }
+  .binder-close {
+    position: sticky;
+    bottom: 0.8rem;
+  }
+  .sleeves {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* clear of the switches in the corner */
+  .shop-ui {
+    bottom: 3.4rem;
   }
   .sketch-card:has(.sketch-loop) {
     grid-template-columns: 1fr;
@@ -856,9 +1304,16 @@ body[data-room='creative-coding'][data-place='item'] #back {
 /* ------------------------------------------------------------- less motion */
 
 :root[data-motion='off'] #card,
-:root[data-motion='off'] .learned-note,
-:root[data-motion='off'] .index-card {
+:root[data-motion='off'] .index-card,
+:root[data-motion='off'] .mini {
   transition: none;
+}
+:root[data-motion='off'] .tcard.is-glow::before,
+:root[data-motion='off'] .tcard.is-sweep .tcard-sheen,
+:root[data-motion='off'] .tcard-spark,
+:root[data-motion='off'] .binder-page.is-turning,
+:root[data-motion='off'] .sleeve.is-arriving {
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   #card,

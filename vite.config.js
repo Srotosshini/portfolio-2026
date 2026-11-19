@@ -66,7 +66,7 @@ function shoebox() {
       const out = resolve(config.root, config.build.outDir)
       // Everything a first visit to the shelf downloads. Clips, process shots,
       // room drawings and room code only load once a box is opened.
-      const later = /^(clips|photos|process|builds|sketches)\/|^drawings\/(?!label-|shelf-)|^assets\/(arcade|about|photography|creative-coding|scraps)-|\.pdf$|^list\.html$/
+      const later = /^(clips|photos|process|builds|sketches|cards)\/|^drawings\/(?!label-|shelf-)|^assets\/(arcade|about|photography|creative-coding|scraps)-|\.pdf$|^list\.html$/
       const landing = listFiles(out)
         .filter((f) => !later.test(f))
         .reduce((sum, f) => sum + statSync(join(out, f)).size, 0)

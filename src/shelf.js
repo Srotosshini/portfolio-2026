@@ -26,12 +26,13 @@ const SIZES = {
 // What each box is lined with: the scan to use if she has made it, and the
 // flat stand-in to draw if not. Any box can also be given its own files:
 // textures/lining-<box>.jpg for the walls, and textures/back-<box>.jpg for a
-// drawing that fills the back wall.
+// drawing that fills the back wall. `case`: not an open shoebox but a
+// collector's display case, with a cardboard frame and a cellophane front.
 const LINING = {
   games: { scan: 'black-card', draw: 'black' },
   about: { draw: 'periwinkle' },
   photography: { scan: 'velvet', draw: 'velvet' },
-  'creative-coding': { scan: 'gallery-wall', draw: 'gallery', floor: { scan: 'gallery-floor', draw: 'boards' } },
+  'creative-coding': { scan: 'display-case', draw: 'display', case: true },
   design: { scan: 'cutting-mat', draw: 'mat' },
   research: { scan: 'manila', draw: 'manila' },
 }
@@ -135,10 +136,6 @@ export async function buildShelf({ stepped }) {
     const inside = new THREE.MeshLambertMaterial({
       map: scan([`lining-${data.id}`, lining.scan], () => sketch.lining(lining.draw)),
     })
-    // a box can have a floor of its own (the gallery's floorboards)
-    const floorLook = lining.floor
-      ? new THREE.MeshLambertMaterial({ map: scan([`floor-${data.id}`, lining.floor.scan], () => sketch.lining(lining.floor.draw)) })
-      : inside
     // the back wall can carry a drawing of its own, shown whole
     const drawnBack = has(`back-${data.id}`)
     const backWall = drawnBack
@@ -156,11 +153,38 @@ export async function buildShelf({ stepped }) {
       mesh.castShadow = mesh.receiveShadow = true
       body.add(mesh)
     }
-    slab(w, T, d, 0, T / 2, -d / 2, 2, { material: floorLook }) // floor
+    slab(w, T, d, 0, T / 2, -d / 2, 2) // floor
     slab(w, T, d, 0, h - T / 2, -d / 2, 3) // top
     slab(T, h - 2 * T, d, -w / 2 + T / 2, h / 2, -d / 2, 0, { upright: true }) // left
     slab(T, h - 2 * T, d, w / 2 - T / 2, h / 2, -d / 2, 1, { upright: true }) // right
     slab(w - 2 * T, h - 2 * T, T, 0, h / 2, -d + T / 2, 4, { material: backWall, whole: drawnBack ? 4 : -1 }) // back
+
+    // The display case: a frame of card round the front (a header along the
+    // top, a post each side) and clear cellophane behind it. The cellophane
+    // slides up into the header when the case is opened; `front` is what the
+    // room needs to do that, its clipping plane included.
+    let front = null
+    if (lining.case) {
+      const bar = (sx, sy, x, y) => {
+        const mesh = new THREE.Mesh(slabGeometry(sx, sy, 0.09), mats.cardboard)
+        mesh.position.set(x, y, 0)
+        mesh.castShadow = mesh.receiveShadow = true
+        body.add(mesh)
+      }
+      bar(w + 0.02, 0.22, 0, h - 0.11)
+      bar(0.09, h - 0.22, -w / 2 + 0.045, (h - 0.22) / 2)
+      bar(0.09, h - 0.22, w / 2 - 0.045, (h - 0.22) / 2)
+      const glassH = h - 0.22 - T
+      const clip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e5) // (clips nothing until it slides)
+      const glass = new THREE.Mesh(
+        new THREE.PlaneGeometry(w - 0.16, glassH),
+        new THREE.MeshBasicMaterial({ map: texture(sketch.cellophane()), transparent: true, depthWrite: false, side: THREE.DoubleSide, clippingPlanes: [clip] }),
+      )
+      glass.position.set(0, T + glassH / 2, -0.055)
+      glass.renderOrder = 2
+      body.add(glass)
+      front = { mesh: glass, clip, y: glass.position.y, height: glassH, top: h - 0.22 }
+    }
 
     const ground = softShadow(w + 0.7, d + 0.7, 0.2)
     ground.position.set(0, 0.004, -d / 2 + 0.2)
@@ -234,7 +258,7 @@ export async function buildShelf({ stepped }) {
     let hovered = false
 
     boxes.set(data.id, {
-      id: data.id, data, group: box, body, tapes, neon, ground, w, h, d,
+      id: data.id, data, group: box, body, tapes, neon, ground, front, w, h, d,
       // where things stand inside: floor height, back wall, usable width and height
       inner: { w: w - 2 * T, h: h - 2 * T, floor: T, back: -d + T },
       // corners of the opening in world space, for the hotspot button

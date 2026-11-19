@@ -35,7 +35,7 @@ Each placeholder is replaced by saving the real file under the name listed below
 
 | File (add `-1`, `-2`, `-3`) | What it is |
 |---|---|
-| `label-games`, `label-photography`, `label-code`, `label-design`, `label-research`, `label-about` | the six masking-tape labels |
+| `label-games`, `label-photography`, `label-creative-coding`, `label-design`, `label-research`, `label-about` | the six masking-tape labels |
 | `label-unbuilt` | the "still cutting this one out" strip |
 | `shelf-jar`, `shelf-roll` | loose things on the shelf |
 | `cabinet-snikisnak`, `cabinet-patchwork`, `cabinet-duckie`, `cabinet-park`, `cabinet-jam` | the five cereal-box cabinets |
@@ -47,11 +47,15 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `projector` | photography: the slide projector, lens pointing right |
 | `screen` | photography: the paper sheet the photos are projected onto (one tracing is enough) |
 | `photo-corners` | photography: four photo corners on a transparent sheet, laid over every print |
-| `gallery-frame` | creative coding: a paper frame for the paintings (cut the opening out: the middle 86 % across, 82 % down). It is used for every painting and yellows toward the 2025 end |
-| `doodle-stand`, `doodle-wave`, `doodle-point`, `doodle-jump` | creative coding: the doodle of you. Draw every pose on the same size of sheet so they line up; point to the right |
-| `floor-note` | creative coding: the note taped to the floor at the entrance |
-| `date-<slug>` | optional: a painting's date tag, hand-written (otherwise the date from the data file is written for you) |
-| `year-2025` | optional: the sign taped up where the corridor reaches 2025 |
+| `pack-fall-2026`, `pack-spring-2026`, … (`pack-<set>`) | creative coding: a booster pack's wrapper, front. Draw it on a sheet about 480 × 700, filling the sheet, with the tear line 14 % down from the top (the strip above it is what tears off). One tracing: packs don't boil |
+| `pack-back` | creative coding: the back of a pack, as it looks from behind (all packs share it) |
+| `era-skyline`, `era-dune`, `era-leaf`, `era-moon`, `era-stamp` | creative coding: the era symbols, on the stand-in wrappers and on every card of their set |
+| `card-back` | creative coding: the back every card shares (your doodle logo on navy), the shape of a card (63 × 88) |
+| `sticker-fall-2026`, `sticker-fall-2024` | creative coding: the "new release!" and "1st edition — rare" stickers on those packs |
+| `tag-<set>` | creative coding: optional, a step's handwritten tag (otherwise "fall 2026 · shanghai · 6 cards" is written for you) |
+| `case-sign` | creative coding: the "please don't touch (jk, touch everything)" sign |
+| `case-note` | creative coding: the "pick a pack and rip it open" note |
+| `binder` | creative coding: the binder standing on the counter, cover facing you (the count is taped on for you) |
 | `self-portrait` | About |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
@@ -69,7 +73,8 @@ If your projector drawing puts the lens or the slide slot somewhere other than t
 | `lining-<box>.jpg` | the inside of one box, if it should differ (`lining-about.jpg`) |
 | `back-<box>.jpg` | a drawing that fills one box's back wall (`back-games.jpg` replaces the stand-in neon) |
 | `film-strip.png` | one frame's width of film, sprocket holes cut out (transparent), repeated along the strip |
-| `gallery-wall.jpg`, `gallery-floor.jpg` | the gallery's walls, and its floorboards |
+| `display-case.jpg` | the inside of the creative coding display case |
+| `counter-mat.jpg` | the mat on its counter, one whole picture, wide (about 2.3 : 1) |
 
 **Everything else**
 
@@ -87,15 +92,23 @@ Game names in file names: `snikisnak`, `patchwork`, `duckie`, `park`, `jam`, `sp
 
 Photos need no list. To give one a caption (and a description for people using screen readers), add it under `photos` in `src/data/projects.js`, by file name without the extension.
 
-**Sketches** (creative coding, the paper gallery) are listed in [src/data/sketches.js](src/data/sketches.js), newest first: title, date, one line, what each uses (mouse, mic, camera, hand, llm, arduino), and what you learned. Each sketch's files go in `public/sketches/<slug>/`:
+**Sketches** (creative coding, the card shop) are trading cards that come in booster packs, one pack per semester.
+
+- The packs are in [src/data/sets.js](src/data/sets.js): each one's name, place (only where you have confirmed it), era symbol, wrapper and card finish, and its step on the staircase (`order`, 1 at the bottom). A semester with nothing in it yet shows as a sealed "lost set" pack (`sealed`); adding a new semester is one more entry at the top.
+- The cards are in [src/data/sketches.js](src/data/sketches.js): which pack each is in, its title and date, what it uses (mouse, mic, camera, hand, ai), a vibe word, one line, what you learned, and its p5 editor link (`editorUrl`), which "try it yourself" opens in a new tab. Mark your favourite in each pack `chase: true`: it comes out last, face down, and turns itself over. Unmarked, the last card listed is the chase card.
+
+No sketch runs on the site itself. Each card's picture is a short recording, in `public/cards/`:
 
 | File | What it is |
 |---|---|
-| `index.html`, `sketch.js` | the sketch, copied from the p5 editor; it runs live when its painting is opened |
-| `loop.mp4` | 5 to 10 seconds of it being used, muted; this plays on the wall, and instead of the live sketch when it can't run live |
-| `still.jpg` | optional: one frame, for the timeline strip and the list page |
+| `<slug>.mp4` | 5 to 10 seconds of the sketch being used, muted, landscape, under about 1.5 MB |
+| `<slug>.webm` | optional: the same clip as WebM (used first where it plays) |
+| `<slug>.jpg` | one frame of it, shown until the clip loads, in the binder, and on the graded slabs in the case |
+| `<slug>-process-1.jpg` … | optional: one or two process pictures for the back of the card (list them under `process` in sketches.js) |
 
-Until a sketch's files are there, a stand-in plays in its painting. Sketches that use the mic or camera ask the visitor first, and show the loop if they say no; `llm` and `arduino` sketches always show their loop.
+Until a card's clip is there, a stand-in pattern plays in its picture. The cards a visitor has opened are kept in their binder (in their browser) for next time.
+
+**Sound** is off until the visitor turns it on (the switch beside "hold still"). The card shop's foil crinkle, tear, card flick, sparkle and binder snap are made in the browser, so there are no sound files.
 
 ## Writing
 
@@ -115,8 +128,12 @@ list.html             the plain list (baked at build time, works without JavaScr
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
 src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, about.js)
-src/data/sketches.js  the gallery's sketches and words
-src/lib/sketches.js   stand-in sketches for the gallery; nothing here should survive
+src/data/sets.js      the creative coding booster packs, one per semester
+src/data/sketches.js  the cards (your sketches) and the card shop's words
+src/lib/trading-cards.js  the cards themselves (HTML over the scene), the binder, a card held up big
+src/lib/shop.js       stand-in drawings for the card shop; nothing here should survive
+src/lib/sketches.js   stand-in pictures for the cards; nothing here should survive
+src/lib/sound.js      the sound switch's sounds
 src/lib/paper.js      cutout, tab, shadow, pop-up, line boil
 src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the floor
 src/lib/stepped.js    the 12 fps stop-motion clock

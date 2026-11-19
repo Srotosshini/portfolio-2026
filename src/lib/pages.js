@@ -4,6 +4,7 @@
 // Keep it free of browser-only code.
 import { site, boxes, projects, about, photos } from '../data/projects.js'
 import { sketches, words } from '../data/sketches.js'
+import { sets } from '../data/sets.js'
 
 const TODO = /^TODO:\s*/
 export const isTodo = (s) => typeof s === 'string' && TODO.test(s)
@@ -141,19 +142,7 @@ export function renderList(files = []) {
       const head = `<h2 class="hand">${esc(b.label)}</h2>`
       if (!b.built) return `<section class="room unbuilt">${head}<p class="hand note">${esc(site.ui.unbuilt)}</p></section>`
       const inBox = `<p class="see"><a class="hand" href="./#/${b.id}">${esc(site.ui.seeInBox)}</a></p>`
-      if (b.id === 'creative-coding') {
-        const cards = sketches.map((s) => {
-          const still = files.find((f) => f.startsWith(`sketches/${s.slug}/still.`))
-          const look = files.includes(s.loop)
-            ? `<video class="sketch-loop" src="${esc(s.loop)}"${still ? ` poster="${esc(still)}"` : ''} muted loop playsinline autoplay preload="metadata"></video>`
-            : still
-              ? `<img class="sketch-loop" src="${esc(still)}" alt="" loading="lazy">`
-              : ''
-          const line = text(s.oneLiner)
-          return `<article class="card sketch-card" id="${esc(s.slug)}">${look}<div><h3 class="hand title">${esc(s.title)}</h3><p class="sketch-date">${esc(s.date)}</p>${line ? `<p>${line}</p>` : ''}<p class="see"><a class="hand" href="./#/${b.id}/${esc(s.slug)}">${esc(words.openIt)}</a></p></div></article>`
-        })
-        return `<section class="room" id="${b.id}">${head}${cards.join('\n')}</section>`
-      }
+      if (b.id === 'creative-coding') return `<section class="room" id="${b.id}">${head}${renderSets(files)}</section>`
       if (b.id === 'photography') {
         const real = photoList(files).filter((p) => p.real)
         const prints = real.map((p) => {
@@ -175,6 +164,34 @@ ${renderProject(p, { files, level: 3 })}
     })
   const me = `<section class="room"><article class="card" id="about">${renderAbout({ files })}</article></section>`
   return [...rooms, me].join('\n')
+}
+
+// Creative coding in the list: a section per pack (newest first), a card per
+// sketch, each with its clip, its words and the way to try it in the p5 editor.
+function renderSets(files) {
+  return [...sets]
+    .sort((a, b) => b.order - a.order)
+    .map((set) => {
+      const name = [set.name, set.place, set.title].filter(Boolean).map(esc).join(' · ')
+      const cards = sketches.filter((s) => s.set === set.id)
+      if (!cards.length) return `<section class="set" id="set-${esc(set.id)}"><h3 class="hand">${name}</h3><p class="hand note">${esc(set.sealed || '')}</p></section>`
+      const items = cards.map((s) => {
+        const poster = files.includes(s.poster) ? ` poster="${esc(s.poster)}"` : ''
+        const look = files.includes(s.video)
+          ? `<video class="sketch-loop" src="${esc(s.video)}"${poster} controls muted loop playsinline preload="none"></video>`
+          : poster
+            ? `<img class="sketch-loop" src="${esc(s.poster)}" alt="" loading="lazy" decoding="async">`
+            : ''
+        const line = text(s.oneLiner)
+        const needs = s.uses.map((u) => words.needs[u]).find(Boolean)
+        const tryIt = s.editorUrl
+          ? `<a class="button hand" href="${esc(s.editorUrl)}" target="_blank" rel="noopener">${esc(words.tryIt)}</a>${needs ? ` <span class="note">${esc(needs)}</span>` : ''}`
+          : ''
+        return `<article class="card sketch-card" id="${esc(s.slug)}">${look}<div><h4 class="hand title">${esc(s.title)}</h4><p class="sketch-date">${esc(s.date)}</p>${line ? `<p>${line}</p>` : ''}<p class="see">${[tryIt, `<a class="hand" href="./#/creative-coding/${esc(s.slug)}">${esc(words.seeCard)}</a>`].filter(Boolean).join(' ')}</p></div></article>`
+      })
+      return `<section class="set" id="set-${esc(set.id)}"><h3 class="hand">${name}</h3>${items.join('\n')}</section>`
+    })
+    .join('\n')
 }
 
 // Her handwriting font and her scanned papers, when the files exist.

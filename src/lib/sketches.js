@@ -1,13 +1,13 @@
-// Stand-in sketches for the paper gallery, until her own are in
-// public/sketches/<slug>/. `standIn` runs one live in an opened painting,
-// leaning toward the pointer; `preview` is a small one for the wall, stepped
-// on the 12 fps clock. Like everything in placeholders.js, none of this is
+// Stand-in sketches for the card shop, until her own clips are in
+// public/cards/. `preview` draws one small, a frame at a time: call step(t)
+// on the 12 fps clock. Nothing runs live on the site (her sketches are tried
+// in the p5 editor), and like everything in placeholders.js, none of this is
 // meant to survive to the finished site.
 const W = 800
 const H = 600
 const NIGHT = '#0d0d12'
 
-// a small copy for a painting on the wall: call step(t) to draw the next frame
+// a small stand-in picture: call step(t) to draw the next frame
 export function preview(index, tint, width = 240, height = 180) {
   const node = document.createElement('canvas')
   node.width = width
@@ -18,40 +18,6 @@ export function preview(index, tint, width = 240, height = 180) {
   ctx.fillRect(0, 0, W, H)
   const frame = SKETCHES[index % SKETCHES.length](ctx, tint, { x: W / 2, y: H / 2, over: false })
   return { node, step: frame }
-}
-
-// the code of a stand-in, for the back of its painting until her own code is there
-export const standInCode = (index) => `// a stand-in, until the real sketch is in its folder\nconst draw = ${SKETCHES[index % SKETCHES.length].toString()}\n`
-
-export function standIn(index, tint) {
-  const node = document.createElement('canvas')
-  node.width = W
-  node.height = H
-  const ctx = node.getContext('2d')
-  const pointer = { x: W / 2, y: H / 2, over: false }
-  node.addEventListener('pointermove', (e) => {
-    const r = node.getBoundingClientRect()
-    pointer.x = ((e.clientX - r.left) / r.width) * W
-    pointer.y = ((e.clientY - r.top) / r.height) * H
-    pointer.over = true
-  })
-  node.addEventListener('pointerleave', () => (pointer.over = false))
-  ctx.fillStyle = NIGHT
-  ctx.fillRect(0, 0, W, H)
-  const frame = SKETCHES[index % SKETCHES.length](ctx, tint, pointer)
-  let running = true
-  const loop = (now) => {
-    if (!running) return
-    frame(now / 1000)
-    requestAnimationFrame(loop)
-  }
-  requestAnimationFrame(loop)
-  return {
-    node,
-    stop() {
-      running = false
-    },
-  }
 }
 
 const centre = (p) => (p.over ? [p.x, p.y] : [W / 2, H / 2])

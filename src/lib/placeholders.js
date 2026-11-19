@@ -7,14 +7,14 @@
 import { PALETTE as P, rng, canvas } from './paper.js'
 
 export const HAND = '"Shelf Hand", "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive'
-const BODY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+export const BODY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 const HI = P.highlighter
 
 // ------------------------------------------------------------------ tools
 
 // A wobbly marker. Each seed gives a slightly different tracing of the same
 // shapes, which is what makes the placeholder lines boil.
-function marker(ctx, seed, { color = P.navy, width = 7, wobble = 2.2 } = {}) {
+export function marker(ctx, seed, { color = P.navy, width = 7, wobble = 2.2 } = {}) {
   const rnd = rng(seed * 7919 + 13)
   const j = (amp = wobble) => (rnd() - 0.5) * 2 * amp
   // a polyline broken into short, slightly wandering segments
@@ -109,10 +109,10 @@ function marker(ctx, seed, { color = P.navy, width = 7, wobble = 2.2 } = {}) {
   return m
 }
 
-const oval = (cx, cy, rx, ry, n = 16) =>
+export const oval = (cx, cy, rx, ry, n = 16) =>
   Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * rx, cy + Math.sin((i / n) * Math.PI * 2) * ry])
 
-const star = (cx, cy, R, inner = 0.45) =>
+export const star = (cx, cy, R, inner = 0.45) =>
   Array.from({ length: 10 }, (_, i) => {
     const a = -Math.PI / 2 + (i * Math.PI) / 5
     const r = i % 2 ? R * inner : R
@@ -122,7 +122,7 @@ const star = (cx, cy, R, inner = 0.45) =>
 // One tile of paper fibres, laid over anything cut from paper so no fill is
 // perfectly flat. It holds still between tracings: lines boil, paper does not.
 let fibreTile
-function fibres(ctx) {
+export function fibres(ctx) {
   if (!fibreTile) {
     fibreTile = canvas(512, 512)
     const f = fibreTile.getContext('2d')
@@ -158,7 +158,7 @@ function wrap(ctx, str, max) {
 }
 
 // Text centred on (x, y), shrunk until it fits `max` wide (and `maxH` tall) on at most `lines` lines.
-function write(ctx, str, x, y, { size = 48, max = 1e4, maxH = 1e4, lines = 1, color = P.navy, font = HAND, weight = 600, tilt = 0 } = {}) {
+export function write(ctx, str, x, y, { size = 48, max = 1e4, maxH = 1e4, lines = 1, color = P.navy, font = HAND, weight = 600, tilt = 0 } = {}) {
   ctx.save()
   ctx.translate(x, y)
   ctx.rotate(tilt)
@@ -757,80 +757,10 @@ export function photoCard(index) {
   return c
 }
 
-// ------------------------------------------------------------------ creative coding: the paper gallery
+// ------------------------------------------------------------------ creative coding: the card shop
 
-// How old a piece of the corridor is: 0 is crisp new paper, 1 the far 2025 end.
-const aged = (a, fresh, old) => {
-  const f = parseInt(fresh.slice(1), 16)
-  const o = parseInt(old.slice(1), 16)
-  const mix = (s) => Math.round(((f >> s) & 255) * (1 - a) + ((o >> s) & 255) * a)
-  return `rgb(${mix(16)}, ${mix(8)}, ${mix(0)})`
-}
-
-// A stretch of the gallery wall: one painting's width, with the picture rail
-// along the top. Older stretches are yellower, and may have a coffee ring.
-export function wallSegment(age, seed = 1) {
-  const c = canvas(360, 576)
-  const ctx = c.getContext('2d')
-  const r = rng(seed * 131 + 7)
-  ctx.fillStyle = aged(age, '#f7f4ec', '#e8d9b0')
-  ctx.fillRect(0, 0, 360, 576)
-  // foxing: small brown speckles that come with age
-  for (let i = 0; i < 240 * age; i++) {
-    ctx.fillStyle = `rgba(150, 110, 50, ${0.05 + r() * 0.12})`
-    ctx.beginPath()
-    ctx.arc(r() * 360, r() * 576, 0.6 + r() * 2.4, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  fibres(ctx)
-  if (age > 0.55 && r() < 0.7) {
-    // a coffee ring, where a mug was put down on the paper before it went up
-    const x = 60 + r() * 240
-    const y = 380 + r() * 150
-    const rad = 34 + r() * 14
-    ctx.strokeStyle = `rgba(120, 72, 30, ${0.16 + r() * 0.1})`
-    for (let k = 0; k < 3; k++) {
-      ctx.lineWidth = 2.5 - k * 0.6
-      ctx.beginPath()
-      ctx.ellipse(x + k * 1.5, y + k, rad - k * 2, rad * 0.94 - k * 2, r() * 3, 0.3, Math.PI * 2 - 0.4 + r())
-      ctx.stroke()
-    }
-  }
-  // the picture rail
-  marker(ctx, seed, { width: 5, wobble: 1 + age * 2 }).line([[-4, 40], [364, 38]])
-  return c
-}
-
-// A paper frame round a moving picture. The opening is 258 × 194 of the
-// 300 × 236 canvas, at (21, 21). Older frames are yellower and wobblier.
-export function galleryFrame(age, seed = 1) {
-  const c = canvas(300, 236)
-  const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 5, wobble: 1.2 + age * 3.2 })
-  m.shape([[4, 5], [296, 3], [297, 232], [3, 233]], aged(age, '#fffdf7', '#efe2bf'))
-  m.shape([[11, 12], [289, 11], [290, 225], [10, 226]], null, { width: 2 }) // an inner line, like a mount
-  m.hole([[21, 21], [279, 21], [279, 215], [21, 215]])
-  fibres(ctx)
-  return c
-}
-
-// a small paper tag with the date written on it, and its hole for the string
-export function dateTag(text, seed = 1) {
-  const c = canvas(220, 96)
-  const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 3, wobble: 1 })
-  m.shape([[30, 8], [212, 6], [214, 88], [30, 90], [6, 48]], P.tape)
-  ctx.fillStyle = '#ffffff'
-  ctx.beginPath()
-  ctx.arc(28, 48, 6, 0, Math.PI * 2)
-  ctx.fill()
-  fibres(ctx)
-  write(ctx, text, 124, 49, { size: 40, max: 160 })
-  return c
-}
-
-// Doodled icons for what a sketch uses: mouse, mic, camera, hand, llm, arduino.
-// Drawn into any 2D canvas at (cx, cy), `size` pixels across.
+// Doodled icons for what a sketch uses: mouse, mic, camera, hand, ai (and llm,
+// arduino). Drawn into any 2D canvas at (cx, cy), `size` pixels across.
 export function useIcon(ctx, kind, cx, cy, size, seed = 1) {
   const s = size / 100
   const m = marker(ctx, seed, { width: Math.max(2, 7 * s), wobble: 1.4 * s })
@@ -854,6 +784,11 @@ export function useIcon(ctx, kind, cx, cy, size, seed = 1) {
     case 'hand':
       m.shape(p([[30, 88], [26, 54], [32, 50], [38, 58], [38, 22], [45, 20], [48, 50], [50, 14], [57, 14], [58, 50], [62, 20], [69, 22], [67, 54], [74, 34], [80, 38], [72, 70], [62, 88]]), P.paper)
       break
+    case 'ai':
+      // a speech bubble with a spark in it
+      m.shape(p([[12, 16], [88, 16], [88, 68], [44, 68], [26, 86], [30, 68], [12, 68]]), P.paper)
+      m.shape(p([[50, 24], [55, 37], [68, 42], [55, 47], [50, 60], [45, 47], [32, 42], [45, 37]]), P.highlighter.yellow, { width: Math.max(1.5, 4 * s) })
+      break
     case 'llm':
       m.shape(p([[12, 18], [70, 18], [70, 54], [36, 54], [24, 66], [26, 54], [12, 54]]), P.paper)
       m.shape(p([[42, 46], [88, 46], [88, 78], [78, 78], [80, 90], [66, 78], [42, 78]]), P.paper)
@@ -866,99 +801,38 @@ export function useIcon(ctx, kind, cx, cy, size, seed = 1) {
   }
 }
 
-// The museum label that flips down under a painting: title, one line, date,
-// and doodles of what it uses. `line` may be empty.
-export function galleryLabel({ title, line, date, uses = [] }, seed = 1) {
-  const c = canvas(600, 300)
+// The display case's front: clear cellophane, with the shine drawn on in
+// white marker. Mostly see-through, so it has to be drawn as a texture with
+// its own transparency rather than cut out.
+export function cellophane(seed = 1) {
+  const c = canvas(1024, 600)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 4, wobble: 1.2 })
-  m.shape([[8, 10], [592, 6], [594, 290], [6, 294]], '#fffdf6')
-  fibres(ctx)
-  write(ctx, title, 300, line ? 70 : 96, { size: 52, max: 540, maxH: 110, lines: 2 })
-  if (line) write(ctx, line, 300, 150, { size: 26, max: 540, maxH: 80, lines: 2, font: BODY, weight: 400, color: '#3b3f57' })
-  write(ctx, date, 90, 250, { size: 30, max: 160, color: P.pencil })
-  uses.forEach((kind, i) => useIcon(ctx, kind, 540 - i * 70, 248, 58, seed + i))
-  return c
-}
-
-// The doodle of Srotosshini: 'stand', 'wave', 'point' (to the right) or 'jump'.
-// Every pose is drawn on the same size of sheet, so they line up.
-export function doodle(pose, seed = 1) {
-  const c = canvas(240, 330)
-  const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 6, wobble: 1.6 })
-  const up = pose === 'jump' ? -26 : 0 // the whole figure, off the ground
-  const at = (pts) => pts.map(([x, y]) => [x, y + up])
-  // legs: apart in a jump, otherwise straight
-  if (pose === 'jump') {
-    m.line(at([[104, 236], [86, 262], [100, 288]]), { width: 7 })
-    m.line(at([[136, 236], [154, 262], [140, 288]]), { width: 7 })
-  } else {
-    m.line(at([[106, 236], [102, 304]]), { width: 7 })
-    m.line(at([[134, 236], [138, 304]]), { width: 7 })
-    m.line(at([[102, 304], [90, 308]]), { width: 7 })
-    m.line(at([[138, 304], [150, 308]]), { width: 7 })
-  }
-  // arms first, so the dress covers where they join
-  const arms = {
-    stand: [[[100, 150], [80, 196], [84, 226]], [[140, 150], [160, 196], [156, 226]]],
-    wave: [[[100, 150], [80, 196], [84, 226]], [[140, 148], [178, 116], [190 + (seed % 2) * 14, 70]]],
-    point: [[[100, 150], [80, 196], [84, 226]], [[140, 148], [190, 150], [226, 146]]],
-    jump: [[[100, 148], [70, 110], [58, 74]], [[140, 148], [170, 110], [182, 74]]],
-  }[pose]
-  for (const arm of arms) m.line(at(arm), { width: 7 })
-  // a dress in periwinkle, a round head, dark hair
-  m.shape(at([[100, 140], [140, 140], [166, 242], [74, 242]]), P.paper)
-  m.highlight(at([[100, 140], [140, 140], [166, 242], [74, 242]]), P.periwinkle, 18)
-  m.shape(oval(120, 96 + up, 34, 38), P.paper)
-  m.shape(at([[84, 98], [88, 60], [120, 50], [152, 60], [156, 98], [146, 76], [120, 70], [94, 76]]), P.navy)
-  ctx.fillStyle = P.navy
-  for (const x of [108, 132]) {
+  const r = rng(seed * 41 + 3)
+  ctx.fillStyle = 'rgba(226, 238, 255, 0.07)'
+  ctx.fillRect(0, 0, 1024, 600)
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = '#ffffff'
+  const stroke = (pts, width, alpha) => {
+    ctx.globalAlpha = alpha
+    ctx.lineWidth = width
     ctx.beginPath()
-    ctx.arc(x, 100 + up, 3.5, 0, Math.PI * 2)
-    ctx.fill()
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x + (r() - 0.5) * 3, y + (r() - 0.5) * 3) : ctx.moveTo(x, y)))
+    ctx.stroke()
   }
-  m.line(at([[110, 116], [120, 121], [130, 116]]), { width: 3.5 })
-  fibres(ctx)
+  // the shine: two strokes across the top left corner, one short one low down
+  stroke([[70, 260], [150, 170], [240, 80], [300, 22]], 16, 0.55)
+  stroke([[120, 300], [200, 215], [290, 120], [350, 58]], 6, 0.45)
+  stroke([[820, 560], [880, 500], [930, 450]], 8, 0.35)
+  // and the faint crinkles cellophane always has
+  for (let i = 0; i < 14; i++) {
+    const x = r() * 1024
+    const y = r() * 600
+    stroke([[x, y], [x + 30 + r() * 60, y + (r() - 0.5) * 40], [x + 60 + r() * 90, y + (r() - 0.5) * 50]], 2, 0.1 + r() * 0.08)
+  }
+  ctx.globalAlpha = 1
   return c
 }
 
-// Paint splashed on the doodle, one colour per painting she has visited.
-// Same sheet size as the doodle, so it lies exactly over her.
-export function splash(colors) {
-  const c = canvas(240, 330)
-  const ctx = c.getContext('2d')
-  colors.forEach((color, i) => {
-    const r = rng(i * 53 + 11)
-    ctx.fillStyle = color
-    for (let k = 0; k < 4; k++) {
-      ctx.beginPath()
-      ctx.arc(84 + r() * 72, 150 + r() * 88, 3 + r() * 6, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  })
-  return c
-}
-
-// the note taped to the floor at the entrance
-export function floorNote(text, seed = 1) {
-  const c = canvas(640, 220)
-  const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 4, wobble: 1.4 })
-  m.shape([[20, 30], [620, 22], [624, 200], [16, 206]], '#fffdf6')
-  fibres(ctx)
-  write(ctx, text, 320, 116, { size: 50, max: 560, maxH: 150, lines: 2 })
-  ctx.fillStyle = P.tape
-  for (const [x, y, a] of [[40, 34, -0.6], [600, 28, 0.5]]) {
-    ctx.save()
-    ctx.translate(x, y)
-    ctx.rotate(a)
-    ctx.globalAlpha = 0.92
-    ctx.fillRect(-44, -15, 88, 30)
-    ctx.restore()
-  }
-  return c
-}
 
 // ------------------------------------------------------------------ materials
 
@@ -1005,18 +879,9 @@ export function lining(kind) {
       return sheet(P.paper, 2, { n: 2600, long: 26, dark: '120,105,80', strength: 0.8 }).c
     case 'black':
       return sheet(P.blackCard, 3, { n: 2600, long: 30, dark: '0,0,0', light: '120,120,140', strength: 0.7 }).c
-    case 'gallery':
-      return sheet('#f6f2e8', 10, { n: 2200, long: 22, dark: '120,105,80', strength: 0.7 }).c
-    case 'boards': {
-      // floorboards drawn on brown paper, running across the box
-      const { c, ctx, r } = sheet('#c9a77c', 11, { n: 2600, long: 120, dark: '90,60,25', light: '240,215,175' })
-      for (let y = 0; y < 1024; y += 96) {
-        marker(ctx, 300 + y, { color: '#7a5a36', width: 3, wobble: 1.2 }).line([[-4, y], [1028, y + (r() - 0.5) * 4]])
-        const joint = r() * 1024
-        marker(ctx, 600 + y, { color: '#7a5a36', width: 2.5, wobble: 1 }).line([[joint, y], [joint + 2, y + 96]])
-      }
-      return c
-    }
+    case 'display':
+      // the inside of the display case: dark blue card, a little like felt
+      return sheet('#26305a', 10, { n: 4200, long: 18, dark: '8,12,36', light: '150,165,235', strength: 0.75 }).c
     case 'periwinkle':
       return sheet(P.periwinkle, 4, { n: 2600, long: 26, dark: '60,70,150', light: '215,220,255' }).c
     case 'velvet': {

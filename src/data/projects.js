@@ -26,6 +26,8 @@ export const site = {
     seeInBox: 'see it in its box',
     stopMotion: 'hold still',
     startMotion: 'let it move',
+    soundIsOn: 'sound on',
+    soundIsOff: 'sound off',
     claw: 'claw machine',
     windBack: 'wind the film back',
     windOn: 'wind the film on',
