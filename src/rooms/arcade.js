@@ -1,15 +1,19 @@
-// Games: the arcade.
-// Cereal-box cabinets with cut-out screens, a claw machine you can play, and a
-// quiet cutout for work that is not a cabinet. Click a cabinet to drop a paper
-// coin; the camera pushes into its screen and the clip (or a playable build)
-// runs there.
+// Games: a handmade cardboard arcade.
+// Cabinets made from cardboard boxes, each with a cut-out screen; a claw
+// machine you can play; a ticket counter; and a quiet cutout for work that is
+// not a cabinet. Brown card, tape, marker and paper bulbs all round: the only
+// bright things in the room are the game screens. Click a cabinet to drop a
+// paper token; the camera pushes into its screen and the clip (or a playable
+// build) runs there. The arcade stands on the shelf too, in miniature, so it
+// is built as soon as the shelf has settled and never folds away.
 import * as THREE from 'three'
 import { projects, site } from '../data/projects.js'
-import { PALETTE as P, makePiece, makeFlat, texture, fillArea, canvas, stack, popUp, foldFlat, boil, rng } from '../lib/paper.js'
+import { PALETTE as P, makePiece, makeFlat, texture, fillArea, canvas, stack, boil, rng } from '../lib/paper.js'
 import { createScraps } from '../lib/scraps.js'
 import * as sketch from '../lib/placeholders.js'
 import { art, has, files, base, loadImage } from '../lib/assets.js'
 import { renderProject } from '../lib/pages.js'
+import { sound } from '../lib/sound.js'
 
 const CABINET_WIDTH = 1.18
 const MACHINE_WIDTH = 1.14
@@ -21,7 +25,7 @@ const FRONT_ROW = -2.02
 
 const SCREEN_IDLE = 0.62 // how bright a screen is when nobody is looking at it
 
-export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
+export async function build({ box, stepped, overlay, redraw, goTo }) {
   const { inner } = box
   const room = new THREE.Group()
   room.position.y = inner.floor
@@ -29,16 +33,17 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
 
   const games = projects.filter((p) => p.box === box.id && p.kind === 'cabinet')
   const quiet = projects.filter((p) => p.box === box.id && p.kind === 'cutout')
-  const accents = Object.values(P.highlighter)
   const rand = rng(77)
+  const onShelf = () => document.body.dataset.place === 'shelf'
   const lerp = THREE.MathUtils.lerp
 
   // her drawings where they exist, labelled stand-ins where they do not
-  const [cabinetArt, cutoutArt, machineArt, clawArt, coinArt, toyArt] = await Promise.all([
+  const posterGames = games.slice(0, 3)
+  const [cabinetArt, cutoutArt, machineArt, clawArt, coinArt, toyArt, posterArt, counterArt, passArt] = await Promise.all([
     Promise.all(
       games.map((game, i) =>
         art(`drawings/cabinet-${game.id}`, (seed) =>
-          sketch.cabinet({ title: game.title, accent: accents[i % accents.length], style: i }, seed),
+          sketch.cabinet({ title: game.title, style: i }, seed),
         ),
       ),
     ),
@@ -47,10 +52,13 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
         art(`drawings/cutout-${project.id}`, (seed) => sketch.placard({ title: project.title }, seed)),
       ),
     ),
-    art('drawings/claw-machine', (seed) => sketch.clawMachine(seed)),
+    art('drawings/claw-machine', (seed) => sketch.clawMachine(seed, site.ui.claw)),
     art('drawings/claw', (seed) => sketch.claw(seed)),
     art('drawings/coin', (seed) => sketch.coin(seed)),
     Promise.all([0, 1, 2].map((i) => art(`drawings/character-${i + 1}`, (seed) => sketch.character(i, seed)))),
+    Promise.all(posterGames.map((game, i) => art(`drawings/poster-${game.id}`, (seed) => sketch.arcadePoster(game.title, i, seed), { edge: 0 }))),
+    art('drawings/ticket-counter', (seed) => sketch.ticketCounter(site.ui.tickets, seed)),
+    art('drawings/fun-pass', (seed) => sketch.funPass(site.ui.funPass, seed), { tracings: 1 }),
   ])
 
   // corners of a standing piece in world space, for its hotspot button
@@ -68,7 +76,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
 
   // off-cuts that fly up when things pop, and stay on the floor afterwards
   const scraps = createScraps(stepped, room, {
-    colors: [P.paper, P.paper, ...accents, P.periwinkle],
+    colors: ['#efe3c4', '#e9d8b4', '#c69b6d', P.tape, '#d9c3a0'],
     bounds: { x: inner.w / 2 - 0.15, back: inner.back + 0.15, front: -0.25 },
   })
 
@@ -160,7 +168,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   const glassTop = (1 - glass.y) * machine.height
   const inside = new THREE.Mesh(
     new THREE.PlaneGeometry(glassW * 1.1, glassH * 1.1),
-    new THREE.MeshLambertMaterial({ color: P.periwinkle, side: THREE.DoubleSide }),
+    new THREE.MeshLambertMaterial({ color: '#d9c3a0', side: THREE.DoubleSide }), // the inside of the box
   )
   inside.position.set(glassX, glassTop - glassH / 2, -0.06)
   inside.receiveShadow = true
@@ -311,6 +319,143 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     return { project, piece }
   })
 
+  // ---- the walls: posters of her games, strips of tape -------------------------
+  posterGames.forEach((game, i) => {
+    const poster = makeFlat(posterArt[i], { width: 0.5 })
+    poster.mesh.position.set(-inner.w / 2 + 0.8 + i * 1.6, inner.h - 0.8, inner.back + 0.012)
+    poster.mesh.rotation.z = (rand() - 0.5) * 0.08
+    poster.mesh.castShadow = false
+    room.add(poster.mesh)
+  })
+  for (const [x, y, angle] of [[-inner.w / 2 + 0.12, 1.4, 1.3], [inner.w / 2 - 0.14, 2.6, -1.4], [0.55, inner.h - 0.3, 0.08]]) {
+    const strip = makeFlat([{ front: sketch.tape('', 9 + x, { width: 300, height: 90 }), aspect: 300 / 90 }], { width: 0.42 })
+    strip.mesh.position.set(x, y, inner.back + 0.014)
+    strip.mesh.rotation.z = angle
+    strip.mesh.castShadow = false
+    room.add(strip.mesh)
+  }
+
+  // ---- a string of paper bulbs overhead ----------------------------------------------
+  const anchors = [
+    new THREE.Vector3(-inner.w / 2 + 0.04, inner.h - 0.08, -0.4),
+    new THREE.Vector3(-1.2, inner.h - 0.05, -0.7),
+    new THREE.Vector3(1.2, inner.h - 0.05, -0.7),
+    new THREE.Vector3(inner.w / 2 - 0.04, inner.h - 0.08, -0.4),
+  ]
+  const wirePoints = []
+  for (let k = 0; k < anchors.length - 1; k++) {
+    const a = anchors[k]
+    const b = anchors[k + 1]
+    const sag = 0.04 + a.distanceTo(b) * 0.035
+    for (let t = 0; t < 1; t += 0.04) wirePoints.push(new THREE.Vector3().lerpVectors(a, b, t).setY(lerp(a.y, b.y, t) - Math.sin(Math.PI * t) * sag))
+  }
+  wirePoints.push(anchors.at(-1).clone())
+  const wire = []
+  for (let k = 0; k < wirePoints.length - 1; k++) {
+    const a = wirePoints[k]
+    const b = wirePoints[k + 1]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const l = Math.hypot(dx, dy) || 1
+    const nx = (-dy / l) * 0.006
+    const ny = (dx / l) * 0.006
+    wire.push(a.x + nx, a.y + ny, a.z, a.x - nx, a.y - ny, a.z, b.x + nx, b.y + ny, b.z, a.x - nx, a.y - ny, a.z, b.x - nx, b.y - ny, b.z, b.x + nx, b.y + ny, b.z)
+  }
+  const wireGeometry = new THREE.BufferGeometry()
+  wireGeometry.setAttribute('position', new THREE.Float32BufferAttribute(wire, 3))
+  room.add(new THREE.Mesh(wireGeometry, new THREE.MeshBasicMaterial({ color: '#3a2c22', side: THREE.DoubleSide })))
+  const bulbAt = []
+  let walked = 0
+  for (let k = 1; k < wirePoints.length; k++) {
+    walked += wirePoints[k].distanceTo(wirePoints[k - 1])
+    if (walked < 0.27) continue
+    walked = 0
+    bulbAt.push(wirePoints[k].clone().add(new THREE.Vector3(0, -0.07, 0.005)))
+  }
+  const BULB_ON = new THREE.Color('#ffe7b0')
+  const BULB_OFF = new THREE.Color('#8a7a62')
+  const bulbs = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(0.1, 0.15),
+    new THREE.MeshBasicMaterial({ map: texture(sketch.paperBulb()), alphaTest: 0.5, side: THREE.DoubleSide }),
+    bulbAt.length,
+  )
+  bulbs.frustumCulled = false
+  const bulbMatrix = new THREE.Matrix4()
+  const bulbTurn = new THREE.Quaternion()
+  bulbAt.forEach((p, k) => {
+    bulbTurn.setFromAxisAngle(new THREE.Vector3(0, 0, 1), (k % 2 ? 1 : -1) * 0.12)
+    bulbs.setMatrixAt(k, bulbMatrix.compose(p, bulbTurn, new THREE.Vector3(1, 1, 1)))
+    bulbs.setColorAt(k, BULB_ON)
+  })
+  room.add(bulbs)
+  const setBulbs = (lit) => {
+    bulbAt.forEach((_, k) => bulbs.setColorAt(k, k < lit ? BULB_ON : BULB_OFF))
+    bulbs.instanceColor.needsUpdate = true
+  }
+
+  // ---- the ticket counter, its tickets and a fun pass -----------------------------------
+  const counter = makePiece(counterArt, { width: 0.92 })
+  counter.group.position.set(-inner.w / 2 + 0.66, 0, -0.66)
+  counter.group.rotation.y = 0.05
+  room.add(counter.group)
+  const pass = makeFlat(passArt, { width: 0.2 })
+  pass.mesh.position.set(-0.22, counter.height * 0.6 + pass.height / 2 - 0.01, 0.03)
+  pass.mesh.rotation.set(-0.12, 0, 0.1)
+  counter.hinge.add(pass.mesh)
+  // the strip of tickets feeds out of the machine's slot; ask for some and more come out
+  const MOST = 8
+  const stripMap = texture(sketch.ticketStrip(MOST))
+  const ticketH = 0.088
+  const strip = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.075, ticketH * MOST).translate(0, (-ticketH * MOST) / 2, 0),
+    new THREE.MeshLambertMaterial({ map: stripMap, alphaTest: 0.5, side: THREE.DoubleSide }),
+  )
+  const slot = new THREE.Vector3((540 / 760 - 0.5) * counter.width, counter.height * (1 - 222 / 600), 0.02)
+  strip.position.copy(slot)
+  strip.castShadow = true
+  counter.hinge.add(strip)
+  let fed = 1
+  const showTickets = (k) => {
+    fed = k
+    strip.scale.y = k / MOST
+    stripMap.repeat.y = k / MOST
+    stripMap.offset.y = 1 - k / MOST
+  }
+  showTickets(1)
+  const loose = [] // tickets torn off, lying on the floor
+  let feeding = false
+  async function dispense() {
+    if (feeding) return
+    feeding = true
+    if (fed >= MOST) {
+      // the strip is torn off and flutters down to the floor; a fresh end shows
+      const torn = strip.clone()
+      torn.material = strip.material.clone()
+      torn.material.map = stripMap.clone()
+      room.attach(torn)
+      showTickets(1)
+      loose.push(torn)
+      const from = torn.position.clone()
+      const to = new THREE.Vector3(from.x + 0.25 + rand() * 0.2, 0.012, -0.22 - rand() * 0.15)
+      await stepped.poses([0.1, 0.25, 0.45, 0.65, 0.85, 1], (k) => {
+        torn.position.lerpVectors(from, to, k)
+        torn.rotation.set(-Math.PI / 2 * k, 0, k * 1.4)
+      })
+    } else {
+      for (let k = 0; k < 2 && fed < MOST; k++) {
+        sound.play('flick')
+        await stepped.poses([0.3, 0.6, 1], (t) => showTickets(Math.min(MOST, fed + t * 0.5)))
+      }
+      showTickets(Math.round(fed))
+    }
+    feeding = false
+  }
+  function resetTickets() {
+    for (const torn of loose) room.remove(torn)
+    loose.length = 0
+    showTickets(1)
+  }
+
   // ---- the coin -------------------------------------------------------------
   const coin = makeFlat(coinArt, { height: 0.2 })
   coin.mesh.visible = false
@@ -369,6 +514,16 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
       aim = THREE.MathUtils.clamp((fx - 0.5) * machine.width, reachLeft, reachRight)
     },
   })
+  overlay.addSpot({
+    group: box.id,
+    label: site.ui.ticketCounter,
+    corners: cornersOf(counter),
+    onClick: dispense,
+    onHover(on) {
+      if (!on || !standing) return
+      stepped.poses([-0.04, 0.025, -0.01, 0], (a) => counter.setFold(a))
+    },
+  })
   for (const cutout of cutouts) {
     cutout.spot = overlay.addSpot({
       group: box.id,
@@ -378,12 +533,15 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     })
   }
 
-  // ---- stand up, fold flat, and everything that keeps moving ------------------
-  const ordered = stack([machine, ...cabinets.map((c) => c.piece), ...cutouts.map((c) => c.piece)])
-  let standing = false
+  // ---- everything stands, and everything that keeps moving ---------------------
+  // (Nothing folds away: the arcade is on show on the shelf as well.)
+  const ordered = stack([machine, ...cabinets.map((c) => c.piece), ...cutouts.map((c) => c.piece), counter])
+  for (const piece of ordered) piece.setFold(0)
+  let standing = false // is someone in the room?
   let playing = null // the cabinet whose game is open
+  const lively = () => standing || onShelf()
 
-  boil(stepped, [...ordered, ...toys.map((t) => t.toy), claw], () => standing && !playing)
+  boil(stepped, [...ordered, ...toys.map((t) => t.toy), claw], () => lively() && !playing)
 
   stepped.every(1, () => {
     if (!standing || grabbing) return false
@@ -395,7 +553,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   // the characters sway on their strings, the screens play their loops (none of it
   // changes a shadow you could see, so the shadows are left alone)
   stepped.every(2, (frame) => {
-    if (!standing) return false
+    if (!lively()) return false
     for (const toy of toys) {
       if (toy.held) continue
       toy.swing = Math.max(0.05, toy.swing * 0.88)
@@ -408,18 +566,28 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   const find = (id) => [...cabinets, ...cutouts].find((c) => (c.game ?? c.project).id === id)
 
   return {
+    // Coming in: the bulbs come on along the string one after another, and the
+    // cabinets give a nod in turn.
     async open() {
-      box.neon?.strike()
-      await popUp(stepped, ordered, { onUp: (piece) => scraps.burst(piece.group.position, 3) })
+      setBulbs(0)
+      await Promise.all([
+        stepped.play(bulbAt.length, (t) => setBulbs(Math.round(t * bulbAt.length))),
+        ...ordered.map((piece, i) =>
+          stepped
+            .poses([-0.07, 0.04, -0.016, 0], (a) => piece.setFold(a), { delay: 2 + i })
+            .then(() => scraps.burst(piece.group.position, 2)),
+        ),
+      ])
       standing = true
     },
     async close() {
       standing = false
       session++
       resetToys()
+      resetTickets()
       claw.mesh.position.copy(clawHome)
       machine.hinge.rotation.z = 0
-      await foldFlat(stepped, ordered)
+      // (everything stays standing: the arcade is on show on the shelf)
     },
 
     title: (id) => (find(id).game ?? find(id).project).title,
@@ -453,8 +621,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
       playing = cabinet
       const media = overlay.mountMedia(cabinet.game, cabinet.screen.corners, { files, base })
       if (media) cabinet.screen.mesh.material = hole
-      // the arcade's lights go down, so the screen and the neon glow
-      await stepped.poses([0.2, 0.4, 0.55], (k) => lights?.dim(k))
+      // (the room's lights stay up: warm lamp light, and the screen is the bright thing)
     },
 
     end() {
@@ -464,7 +631,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
         playing.screen.idle.color.setScalar(SCREEN_IDLE)
       }
       playing = null
-      stepped.poses([0.35, 0.15, 0], (k) => lights?.dim(k))
       redraw()
     },
   }

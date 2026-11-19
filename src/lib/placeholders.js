@@ -177,12 +177,29 @@ export function write(ctx, str, x, y, { size = 48, max = 1e4, maxH = 1e4, lines 
 }
 
 // ------------------------------------------------------------------ arcade
+// A handmade cardboard arcade. Everything is brown card, kraft, masking tape,
+// marker and paper in quiet colours: the only bright things in the room are
+// the game screens.
 
-// Three cereal-box silhouettes, so the row of cabinets is not five of the same.
+const KRAFT = '#c69b6d'
+const KRAFT_DARK = '#8d6440'
+// What each cabinet's box was before it was a cabinet (they go round in turn).
+const BOXES = [
+  { fill: KRAFT, kind: 'shipping' },
+  { fill: '#b8624b', kind: 'cereal' }, // a faded tomato-red cereal box
+  { fill: '#6c88a8', kind: 'cereal' }, // faded blue
+  { fill: '#c9a24f', kind: 'cereal' }, // mustard
+  { fill: '#8ea37c', kind: 'cereal' }, // sage
+  { fill: '#d8cdb4', kind: 'shipping' }, // a white box gone cream
+]
+const CAPS = ['#b5523b', '#4f8c8a', '#efe3c4', '#8a8c4a', '#6b5a8a'] // bottle caps, a little faded
+
+// Three box silhouettes, so the row of cabinets is not five of the same
+// (drawn for a 640 × 1000 sheet; a taller or shorter box stretches below the screen).
 const BODIES = [
-  [[46, 104], [150, 96], [172, 26], [292, 36], [318, 98], [346, 30], [468, 24], [490, 100], [598, 108], [606, 978], [38, 986]], // top flaps standing up
-  [[78, 160], [34, 46], [610, 36], [570, 162], [604, 978], [40, 986]], // a hood that overhangs the screen
-  [[50, 134], [92, 60], [196, 30], [444, 26], [544, 58], [592, 136], [606, 978], [38, 986]], // rounded shoulders
+  [[46, 104], [150, 96], [172, 26], [292, 36], [318, 98], [346, 30], [468, 24], [490, 100], [598, 108]], // top flaps standing up
+  [[78, 160], [34, 46], [610, 36], [570, 162]], // a hood that overhangs the screen
+  [[50, 134], [92, 60], [196, 30], [444, 26], [544, 58], [592, 136]], // rounded shoulders
 ]
 const MARQUEES = [
   { band: [[84, 128], [560, 122], [566, 236], [80, 242]], y: 182, h: 104 },
@@ -190,100 +207,201 @@ const MARQUEES = [
   { band: [[92, 96], [552, 90], [560, 226], [86, 232]], y: 161, h: 122 },
 ]
 
-// A cereal-box cabinet with a cut-out screen.
-export function cabinet({ title, accent, style = 0 }, seed = 1) {
-  const c = canvas(640, 1000)
+// a bottle cap, crimped round its edge, for a button
+function bottleCap(m, x, y, r, color) {
+  const pts = Array.from({ length: 44 }, (_, i) => {
+    const a = (i / 44) * Math.PI * 2
+    const rad = i % 2 ? r : r * 0.88
+    return [x + Math.cos(a) * rad, y + Math.sin(a) * rad]
+  })
+  m.shape(pts, color, { width: 3 })
+  m.blob(x, y, r * 0.62, r * 0.62, null, { width: 2 })
+}
+
+// a joystick, its stick and ball wrapped in masking tape
+function tapedJoystick(ctx, m, x, y, h) {
+  m.blob(x, y + 6, 34, 10, '#4a3d33', { width: 3 })
+  const stick = [[x - 10, y], [x + 10, y], [x + 8, y - h], [x - 8, y - h]]
+  m.shape(stick, P.tape, { width: 3 })
+  ctx.save()
+  ctx.beginPath()
+  stick.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)))
+  ctx.closePath()
+  ctx.clip()
+  ctx.strokeStyle = 'rgba(140, 112, 55, 0.55)'
+  ctx.lineWidth = 2
+  for (let k = -h; k < 30; k += 12) {
+    ctx.beginPath()
+    ctx.moveTo(x - 14, y + k)
+    ctx.lineTo(x + 14, y + k - 10)
+    ctx.stroke()
+  }
+  ctx.restore()
+  m.blob(x, y - h - 18, 26, 24, P.tape, { width: 3.5 })
+  m.line([[x - 22, y - h - 26], [x + 20, y - h - 10]], { width: 2, color: 'rgba(140, 112, 55, 0.7)' })
+  m.line([[x - 18, y - h - 8], [x + 22, y - h - 24]], { width: 2, color: 'rgba(140, 112, 55, 0.7)' })
+}
+
+// The cut edge of corrugated card: the wavy core between two liners, along
+// a line across (x0..x1 at y) or, with down set, a line down (y0..y1 at x).
+function corrugatedEdge(ctx, a0, a1, at, depth = 14, down = false) {
+  ctx.save()
+  ctx.fillStyle = '#e2c69c'
+  if (down) ctx.fillRect(at, a0, depth, a1 - a0)
+  else ctx.fillRect(a0, at, a1 - a0, depth)
+  ctx.strokeStyle = 'rgba(110, 75, 40, 0.75)'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  for (let s = a0; s <= a1; s += 4) {
+    const wave = at + depth / 2 + Math.sin(s / 6) * (depth / 2 - 2)
+    if (down) ctx.lineTo(wave, s)
+    else ctx.lineTo(s, wave)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+const mix = (a, b, t) => {
+  const A = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16))
+  const B = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16))
+  return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('')
+}
+
+// A cabinet made from a cardboard box: the game's name lettered in marker, a
+// cut-out screen, bottle-cap buttons, a tape-wrapped joystick, a slot for a
+// paper token. `style` picks the box (and its height, colour and decoration).
+export function cabinet({ title, style = 0 }, seed = 1) {
+  const H = [1000, 950, 1050, 980, 1030, 960][style % 6]
+  const W = 640
+  const c = canvas(W, H)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
+  const r = rng(seed * 17 + style)
   const kind = style % 3
-  m.shape(BODIES[kind], P.paper)
-  m.highlight(MARQUEES[kind].band, accent)
+  const box = BOXES[style % BOXES.length]
+  const below = H - 1000 // how much taller (or shorter) than the drawing it was planned on
+  const body = [...BODIES[kind], [606, H - 22], [38, H - 14]]
+  m.shape(body, box.fill)
+  ctx.save()
+  ctx.beginPath()
+  body.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+  ctx.closePath()
+  ctx.clip()
+  // the card's own texture: faint ribs showing through, scuffs
+  for (let y = 0; y < H; y += 18) {
+    ctx.fillStyle = `rgba(80, 50, 20, ${0.03 + r() * 0.04})`
+    ctx.fillRect(0, y, W, 8)
+  }
+  if (box.kind === 'shipping') {
+    // packing tape down the middle of the flaps, and arrows that say which way up
+    ctx.fillStyle = 'rgba(222, 196, 140, 0.75)'
+    ctx.fillRect(W / 2 - 46, 0, 92, 250)
+    m.line([[512, 790 + below], [512, 700 + below]], { width: 5 })
+    m.line([[490, 726 + below], [512, 700 + below], [534, 726 + below]], { width: 5 })
+    m.line([[560, 790 + below], [560, 700 + below]], { width: 5 })
+    m.line([[538, 726 + below], [560, 700 + below], [582, 726 + below]], { width: 5 })
+  } else {
+    // a cereal box: a bowl, flakes, and a sticker gone pale
+    m.blob(150, 880 + below, 70, 30, '#efe3c4', { width: 4 })
+    m.shape([[80, 880 + below], [220, 880 + below], [196, 930 + below], [104, 930 + below]], '#efe3c4', { width: 4 })
+    for (let i = 0; i < 6; i++) m.blob(110 + i * 16, 866 + below - (i % 2) * 8, 9, 6, mix(box.fill, '#f2d79a', 0.6), { width: 2 })
+    m.shape(star(500, 860 + below, 46, 0.6), mix(box.fill, '#ffffff', 0.55), { width: 4 })
+  }
+  ctx.restore()
+  corrugatedEdge(ctx, 170, H - 40, 44, 12, true)
+  corrugatedEdge(ctx, 170, H - 40, 584, 12, true)
+
+  // the marquee: the game's name on a strip of paper, in marker
+  m.shape(MARQUEES[kind].band, '#f6efdc')
   write(ctx, title, 322, MARQUEES[kind].y, { size: 58, max: 430, maxH: MARQUEES[kind].h, lines: 2 })
 
-  m.shape([[88, 246], [554, 242], [558, 520], [84, 524]], null, { width: 4 }) // bezel
+  m.shape([[88, 246], [554, 242], [558, 520], [84, 524]], '#3a2c22', { width: 4 }) // the screen's bezel
   m.hole([[108, 262], [534, 258], [538, 500], [104, 504]]) // the screen, 16:9
 
-  m.line([[70, 584], [574, 576]])
-  m.line([[70, 696], [574, 702]])
-  m.line([[192, 666], [178, 612]], { width: 10 }) // joystick
-  m.blob(176, 604, 22, 22, P.paper)
-  m.highlight(oval(176, 604, 20, 20), accent, 14)
-  for (const [x, tint] of [[380, accent], [452, HI.pink], [520, null]].slice(0, 2 + (style % 2))) {
-    m.blob(x, 640, 26, 24, P.paper)
-    if (tint) m.highlight(oval(x, 640, 24, 22), tint, 14)
-  }
+  // the control panel: a shelf of card, a joystick, bottle caps
+  const panel = 590 + below * 0.3
+  m.shape([[62, panel - 30], [578, panel - 38], [586, panel + 70], [56, panel + 78]], mix(box.fill, '#000000', 0.12))
+  tapedJoystick(ctx, m, 178, panel + 44, 46)
+  const caps = 2 + (style % 2)
+  for (let i = 0; i < caps; i++) bottleCap(m, 360 + i * 74, panel + 20, 27, CAPS[(style + i) % CAPS.length])
 
-  m.rect(296, 770, 54, 98, P.paper) // coin slot
-  m.line([[323, 792], [323, 846]], { width: 10 })
-  if (kind === 0) {
-    // every cereal box has one of these on the side
-    m.rect(72, 762, 150, 122, null, { width: 4 })
-    for (let i = 0; i < 5; i++) m.line([[84, 784 + i * 20], [150 + ((i * 37) % 60), 784 + i * 20]], { width: 3.5 })
-    m.shape(star(470, 806, 34), P.paper, { width: 5 })
-    m.highlight(star(470, 806, 32), accent, 12)
-    m.shape(star(540, 868, 22), null, { width: 5 })
-  } else if (kind === 1) {
-    for (const y of [786, 836]) {
-      const zig = []
-      for (let x = 78, up = true; x <= 236; x += 26, up = !up) zig.push([x, up ? y : y + 28])
-      m.line(zig, { width: 5 })
-    }
-    m.line([[410, 786], [574, 782]], { width: 5 })
-    m.line([[410, 826], [574, 822]], { width: 5 })
-    m.line([[410, 866], [540, 864]], { width: 5 })
-  } else {
-    for (let i = 0; i < 3; i++)
-      for (let k = 0; k < 3; k++) {
-        const pts = [[410 + i * 50, 770 + k * 38], [452 + i * 50, 770 + k * 38], [452 + i * 50, 802 + k * 38], [410 + i * 50, 802 + k * 38]]
-        m.shape(pts, null, { width: 4 })
-        if ((i + k) % 2 === 0) m.highlight(pts, accent, 12)
-      }
-    m.blob(150, 824, 58, 54, null, { width: 5 })
-    m.blob(150, 824, 30, 28, null, { width: 4 })
+  // the slot a paper token goes into, and a little token drawn beside it
+  const slot = H * 0.82
+  m.rect(296, slot - 50, 54, 100, '#3a2c22')
+  m.line([[323, slot - 28], [323, slot + 28]], { width: 9, color: '#120c08' })
+  m.blob(400, slot, 22, 22, '#efe3c4', { width: 3 })
+  m.line([[364, slot], [384, slot]], { width: 3 })
+
+  // tape over a corner or two
+  ctx.fillStyle = 'rgba(232, 220, 182, 0.92)'
+  for (const [x, y, a] of [[60, H - 120, -0.7], [584, 300, 0.6]].slice(0, 1 + (style % 2))) {
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(a)
+    ctx.fillRect(-46, -14, 92, 28)
+    ctx.restore()
   }
   fibres(ctx)
   return c
 }
 
+// The token you drop in a cabinet: a hand-drawn paper token.
 export function coin(seed = 1) {
   const c = canvas(200, 200)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 9 })
-  m.blob(100, 100, 84, 84, P.paper)
-  m.highlight(oval(100, 100, 80, 80), HI.yellow, 20)
-  m.blob(100, 100, 58, 58, null, { width: 5 })
-  write(ctx, '1', 100, 104, { size: 76 })
+  const m = marker(ctx, seed, { width: 7 })
+  m.blob(100, 100, 84, 84, '#ead9b4')
+  m.blob(100, 100, 62, 62, null, { width: 3.5 })
+  m.shape(star(100, 102, 40, 0.45), '#c9a24f', { width: 4 })
   fibres(ctx)
   return c
 }
 
-export function clawMachine(seed = 1) {
+// The claw machine: a tall cardboard box with its glass cut right out.
+export function clawMachine(seed = 1, title = 'claw machine') {
   const c = canvas(520, 1000)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed)
-  m.shape([[36, 100], [72, 30], [450, 24], [486, 96], [492, 978], [30, 986]], P.paper)
-  m.highlight([[72, 46], [450, 40], [460, 112], [62, 118]], HI.pink)
-  m.shape(star(150, 80, 22), null, { width: 4 })
-  m.shape(star(262, 76, 28), null, { width: 4 })
-  m.shape(star(374, 80, 22), null, { width: 4 })
+  const body = [[36, 100], [72, 30], [450, 24], [486, 96], [492, 978], [30, 986]]
+  m.shape(body, KRAFT)
+  ctx.save()
+  ctx.beginPath()
+  body.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+  ctx.closePath()
+  ctx.clip()
+  for (let y = 0; y < 1000; y += 18) {
+    ctx.fillStyle = 'rgba(80, 50, 20, 0.05)'
+    ctx.fillRect(0, y, 520, 8)
+  }
+  ctx.restore()
+  corrugatedEdge(ctx, 80, 440, 30, 12)
+  m.shape([[70, 50], [452, 44], [460, 120], [62, 126]], '#f6efdc')
+  write(ctx, title, 262, 86, { size: 50, max: 360 })
   m.hole([[78, 152], [444, 148], [448, 590], [74, 594]]) // the glass
   m.line([[52, 634], [470, 628]])
-  m.rect(84, 706, 150, 150, P.blackCard) // prize chute
-  m.line([[270, 760], [250, 790], [270, 820]], { width: 5 }) // an arrow to it
+  m.rect(84, 706, 150, 150, '#2a1e16') // the prize chute
+  m.line([[270, 760], [250, 790], [270, 820]], { width: 5 })
   m.line([[250, 790], [330, 790]], { width: 5 })
-  m.line([[392, 772], [404, 714]], { width: 10 })
-  m.blob(406, 706, 22, 22, P.paper)
-  m.highlight(oval(406, 706, 20, 20), HI.pink, 14)
+  tapedJoystick(ctx, m, 400, 760, 50)
+  bottleCap(m, 330, 690, 24, CAPS[0])
+  ctx.fillStyle = 'rgba(232, 220, 182, 0.92)'
+  for (const [x, y, a] of [[60, 160, -0.6], [460, 160, 0.6], [470, 900, -0.5]]) {
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(a)
+    ctx.fillRect(-44, -13, 88, 26)
+    ctx.restore()
+  }
   fibres(ctx)
   return c
 }
 
+// the claw, cut from grey card
 export function claw(seed = 1) {
   const c = canvas(200, 300)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed, { width: 8 })
-  m.rect(86, 8, 28, 150, P.paper)
-  m.shape([[56, 152], [144, 152], [154, 186], [46, 186]], P.paper)
+  m.rect(86, 8, 28, 150, '#cfcbc2')
+  m.shape([[56, 152], [144, 152], [154, 186], [46, 186]], '#cfcbc2')
   m.line([[60, 186], [30, 244], [58, 286]])
   m.line([[100, 186], [100, 278]])
   m.line([[140, 186], [170, 244], [142, 286]])
@@ -291,12 +409,12 @@ export function claw(seed = 1) {
   return c
 }
 
-// Three stand-in characters for the claw machine.
+// Three stand-in characters for the claw machine, cut from coloured paper.
 export function character(index, seed = 1) {
   const c = canvas(220, 270)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed, { width: 8 })
-  const tint = [HI.yellow, HI.green, HI.orange][index % 3]
+  const tint = ['#e2c27a', '#9db58a', '#d99a8f'][index % 3]
   const parts =
     index % 3 === 0
       ? [oval(64, 62, 24, 34), oval(156, 62, 24, 34), oval(110, 156, 84, 96)]
@@ -307,10 +425,7 @@ export function character(index, seed = 1) {
     m.line([[110, 66], [110, 26]])
     m.blob(110, 20, 11, 11, P.paper)
   }
-  for (const part of parts) {
-    m.shape(part, P.paper)
-    m.highlight(part, tint, 22)
-  }
+  for (const part of parts) m.shape(part, tint)
   ctx.fillStyle = P.navy
   for (const x of [84, 136]) {
     ctx.beginPath()
@@ -410,40 +525,126 @@ export function attract(ctx, index, frame, { title }) {
   if (t % 8 < 6) write(ctx, title, 120, 112, { size: 20, max: 222, color: P.paper })
 }
 
-// Stand-in neon for the arcade's back wall: bright tubes on one canvas and
-// their soft halo on another, so the sign can flicker.
-export function neon() {
-  const tubes = canvas(1024, 512)
-  const glow = canvas(1024, 512)
-  const t = tubes.getContext('2d')
-  const g = glow.getContext('2d')
-  const tube = (pts, tint, seed, closed = false) => {
-    const draw = (ctx, o) => {
-      const m = marker(ctx, seed, o)
-      if (closed) m.shape(pts, null)
-      else m.line(pts)
-    }
-    draw(t, { color: tint, width: 12, wobble: 1.6 })
-    draw(t, { color: '#ffffff', width: 3, wobble: 1.6 }) // the hot core of the tube
-    // the same stroke again, drawn off-canvas so only its blurred shadow lands
-    g.save()
-    g.shadowColor = tint
-    g.shadowBlur = 36
-    g.shadowOffsetX = 3000
-    g.translate(-3000, 0)
-    draw(g, { color: tint, width: 18, wobble: 1.6 })
-    g.restore()
+// A poster for one of her games, drawn in marker on paper, taped to the wall.
+export function arcadePoster(title, index, seed = 1) {
+  const c = canvas(420, 560)
+  const ctx = c.getContext('2d')
+  const r = rng(seed * 29 + index)
+  const m = marker(ctx, seed + index, { width: 5, wobble: 1.4 })
+  const paper = ['#f3e9d2', '#e9d8b4', '#efe0c9'][index % 3]
+  const accent = ['#b5523b', '#4f8c8a', '#c9a24f'][index % 3]
+  m.shape([[20, 26], [400, 18], [404, 540], [16, 548]], paper)
+  fibres(ctx)
+  write(ctx, title, 210, 100, { size: 64, max: 340, maxH: 130, lines: 2 })
+  // a doodle of the game: a character, or a little scene
+  const d = marker(ctx, seed + index + 7, { width: 6, wobble: 1.6 })
+  if (index % 3 === 0) {
+    d.blob(210, 320, 92, 86, accent)
+    for (const x of [176, 244]) d.blob(x, 302, 12, 14, '#ffffff', { width: 3 })
+    d.line([[180, 360], [210, 376], [240, 360]], { width: 5 })
+  } else if (index % 3 === 1) {
+    d.line([[60, 420], [150, 300], [220, 380], [300, 260], [370, 420]], { width: 7 })
+    d.blob(320, 210, 30, 30, accent)
+  } else {
+    d.shape(star(210, 320, 100, 0.48), accent)
+    d.blob(210, 326, 30, 30, null, { width: 4 })
   }
-  const zig = []
-  for (let x = 60, up = true; x <= 966; x += 50, up = !up) zig.push([x, up ? 52 : 104])
-  tube(zig, HI.yellow, 11)
-  tube(star(170, 232, 62), HI.pink, 12, true)
-  tube(star(512, 206, 40), HI.orange, 13, true)
-  tube(star(866, 226, 54), HI.green, 14, true)
-  const wave = []
-  for (let x = 250; x <= 780; x += 36) wave.push([x, 300 + Math.sin(x / 44) * 16])
-  tube(wave, HI.blue, 15)
-  return { tubes, glow }
+  for (let i = 0; i < 3; i++) d.line([[80, 460 + i * 22], [220 + r() * 120, 460 + i * 22]], { width: 3, color: P.pencil })
+  // two strips of tape across the top corners
+  ctx.fillStyle = 'rgba(232, 220, 182, 0.92)'
+  for (const [x, a] of [[40, -0.6], [380, 0.6]]) {
+    ctx.save()
+    ctx.translate(x, 30)
+    ctx.rotate(a)
+    ctx.fillRect(-44, -14, 88, 28)
+    ctx.restore()
+  }
+  return c
+}
+
+// A paper bulb for the string of lights overhead: white, so each one can be tinted.
+export function paperBulb() {
+  const c = canvas(80, 120)
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.moveTo(40, 116)
+  ctx.bezierCurveTo(6, 96, 6, 44, 40, 34)
+  ctx.bezierCurveTo(74, 44, 74, 96, 40, 116)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(120, 90, 50, 0.5)'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(40, 40)
+  ctx.lineTo(40, 110)
+  ctx.stroke()
+  ctx.fillStyle = '#4a3d33'
+  ctx.fillRect(28, 6, 24, 30)
+  return c
+}
+
+// The ticket counter: a cardboard counter with a roll of tickets on it.
+export function ticketCounter(title, seed = 1) {
+  const c = canvas(760, 600)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed)
+  // the ticket machine on top: a little box with the roll showing, and a slot
+  m.shape([[430, 70], [640, 64], [646, 250], [426, 256]], '#8ea37c')
+  m.blob(536, 120, 48, 40, '#efd2b8')
+  m.blob(536, 120, 16, 13, '#8d6440', { width: 3 })
+  m.rect(470, 210, 140, 18, '#2a1e16')
+  // the counter itself
+  m.shape([[30, 240], [730, 232], [736, 300], [24, 306]], KRAFT_DARK)
+  m.shape([[44, 300], [716, 294], [722, 590], [38, 596]], KRAFT)
+  corrugatedEdge(ctx, 40, 720, 300, 12)
+  m.shape([[150, 360], [610, 352], [614, 470], [146, 476]], '#f6efdc')
+  write(ctx, title, 380, 414, { size: 70, max: 400 })
+  // a jar of tickets on the counter
+  m.shape([[120, 120], [250, 116], [258, 240], [114, 244]], 'rgba(235, 240, 245, 0.9)')
+  for (let i = 0; i < 9; i++) m.rect(130 + (i % 4) * 30, 150 + Math.floor(i / 4) * 30, 26, 16, '#e7b08f', { width: 2 })
+  fibres(ctx)
+  return c
+}
+
+// A strip of paper tickets (they feed out of the ticket machine).
+export function ticketStrip(count = 4, seed = 1) {
+  const c = canvas(150, 92 * count + 10)
+  const ctx = c.getContext('2d')
+  for (let i = 0; i < count; i++) {
+    const y = 5 + i * 92
+    const m = marker(ctx, seed + i, { width: 3, wobble: 0.8 })
+    m.shape([[8, y], [142, y], [142, y + 88], [8, y + 88]], '#e7b08f')
+    m.rect(22, y + 14, 106, 60, null, { width: 2, color: 'rgba(90, 40, 20, 0.6)' })
+    m.shape(star(75, y + 44, 18, 0.45), null, { width: 2.5, color: '#8d3f2a' })
+    ctx.strokeStyle = 'rgba(90, 40, 20, 0.6)'
+    ctx.setLineDash([5, 5])
+    ctx.beginPath()
+    ctx.moveTo(8, y + 90)
+    ctx.lineTo(142, y + 90)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+  return c
+}
+
+// a "fun pass", propped up on the counter
+export function funPass(title, seed = 1) {
+  const c = canvas(330, 230)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 4 })
+  m.shape([[14, 22], [316, 14], [320, 214], [12, 220]], '#f3e9d2')
+  m.rect(28, 36, 274, 54, '#4f8c8a', { width: 3 })
+  write(ctx, title, 165, 64, { size: 40, max: 250, color: '#f3e9d2' })
+  m.shape(star(80, 150, 34, 0.45), '#c9a24f', { width: 3 })
+  for (let i = 0; i < 3; i++) m.line([[140, 128 + i * 22], [290 - i * 30, 128 + i * 22]], { width: 2.5, color: P.pencil })
+  ctx.save()
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath()
+  ctx.arc(290, 190, 10, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+  fibres(ctx)
+  return c
 }
 
 // ------------------------------------------------------------------ shelf
@@ -877,8 +1078,64 @@ export function lining(kind) {
     }
     case 'paper':
       return sheet(P.paper, 2, { n: 2600, long: 26, dark: '120,105,80', strength: 0.8 }).c
-    case 'black':
-      return sheet(P.blackCard, 3, { n: 2600, long: 30, dark: '0,0,0', light: '120,120,140', strength: 0.7 }).c
+    case 'arcade': {
+      // the arcade's walls: warm brown card, with patches where the top
+      // layer has torn away and the corrugation underneath shows
+      const { c, ctx, r } = sheet('#b4875a', 21, { n: 3600, long: 80, dark: '90,60,25', light: '240,205,160' })
+      for (let y = 0; y < 1024; y += 16) {
+        ctx.fillStyle = `rgba(80, 50, 20, ${0.02 + r() * 0.03})`
+        ctx.fillRect(0, y, 1024, 7)
+      }
+      for (let k = 0; k < 5; k++) {
+        const x = 40 + r() * 860
+        const y = 40 + r() * 860
+        const w = 70 + r() * 120
+        const h = 50 + r() * 90
+        const torn = []
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2
+          torn.push([x + w / 2 + Math.cos(a) * (w / 2) * (0.75 + r() * 0.35), y + h / 2 + Math.sin(a) * (h / 2) * (0.75 + r() * 0.35)])
+        }
+        const outline = () => {
+          ctx.beginPath()
+          torn.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)))
+          ctx.closePath()
+        }
+        ctx.save()
+        outline()
+        ctx.clip()
+        ctx.fillStyle = '#d4ab7a'
+        ctx.fillRect(x - 10, y - 10, w + 20, h + 20)
+        for (let rx = x - 10; rx < x + w + 10; rx += 9) {
+          ctx.fillStyle = 'rgba(110, 72, 35, 0.35)'
+          ctx.fillRect(rx, y - 10, 3, h + 20)
+        }
+        ctx.restore()
+        outline()
+        ctx.strokeStyle = '#efd9b5'
+        ctx.lineWidth = 3
+        ctx.stroke()
+      }
+      return c
+    }
+    case 'carpet': {
+      // a patterned paper "carpet": arcade-carpet shapes, in quiet colours
+      const { c, ctx, r } = sheet('#5a3046', 22, { n: 2000, long: 14, dark: '30,10,20', light: '210,160,180', strength: 0.6 })
+      const inks = ['#c9a24f', '#4f8c8a', '#e8dcc0', '#c97a5e']
+      for (let y = 0; y < 1024; y += 128) {
+        for (let x = 0; x < 1024; x += 128) {
+          const cx = x + 64 + (r() - 0.5) * 34
+          const cy = y + 64 + (r() - 0.5) * 34
+          const m = marker(ctx, x * 7 + y + 3, { color: inks[Math.floor(r() * inks.length)], width: 6, wobble: 1.4 })
+          const kind = Math.floor(r() * 4)
+          if (kind === 0) m.shape([[cx, cy - 26], [cx + 24, cy + 18], [cx - 24, cy + 18]], null)
+          else if (kind === 1) m.line(Array.from({ length: 7 }, (_, i) => [cx - 36 + i * 12, cy + (i % 2 ? -12 : 12)]))
+          else if (kind === 2) m.blob(cx, cy, 18, 18, null)
+          else m.line(Array.from({ length: 9 }, (_, i) => [cx - 40 + i * 10, cy + Math.sin(i) * 12]))
+        }
+      }
+      return c
+    }
     case 'night': {
       // the market's walls: a night sky, with a scatter of tiny stars
       const { c, ctx, r } = sheet('#1d2752', 12, { n: 2400, long: 20, dark: '5,8,25', light: '120,135,210', strength: 0.7 })

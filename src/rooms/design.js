@@ -1077,7 +1077,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   return {
     async open() {
       mode = 'street'
-      if (box.tapes[0]) box.tapes[0].visible = false // the box's label would sit on the street's corner
       sound.ambient('wind', true)
       showSnow(!stepped.reduced)
       await dim(NIGHT)
@@ -1085,7 +1084,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
     },
     async close() {
       mode = 'closed'
-      if (box.tapes[0]) box.tapes[0].visible = true
       ui.closeAll()
       sound.ambient('wind', false)
       for (const stall of market) rest(stall)

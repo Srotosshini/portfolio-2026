@@ -27,7 +27,7 @@ import { buildShelf } from './shelf.js'
 //   early:   made as soon as the shelf has settled, so its box shows its
 //            scene (the market) without anyone pointing at it first
 const ROOMS = {
-  games: { load: () => import('./rooms/arcade.js') },
+  games: { load: () => import('./rooms/arcade.js'), early: true },
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
   'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
   design: { load: () => import('./rooms/design.js'), bare: true, early: true, focus: 0.42, fit: 1.04, perUnit: 150 },
@@ -192,13 +192,17 @@ async function start() {
           await renderer.compileAsync(box.body, rig.camera, scene).catch(() => {})
           while (unsent.length) {
             await turn()
-            renderer.initTexture(unsent.shift())
+            const next = unsent.shift() // (two rooms made at once share the queue: it may be empty by now)
+            if (next) renderer.initTexture(next)
           }
           for (const child of added) child.visible = true
           redraw()
           return room
         })
-      made.catch(() => making.delete(id)) // could not load (offline?): try again next time
+      made.catch((error) => {
+        console.error(error)
+        making.delete(id) // could not load (offline?): try again next time
+      })
       making.set(id, made)
     }
     return making.get(id)
@@ -294,6 +298,12 @@ async function start() {
     }
   }
 
+  // The boxes' tape labels belong on the shelf. Inside a room they would hang
+  // in view (the box above's, over the masthead), so they come down meanwhile.
+  function labels(on) {
+    for (const box of shelf.boxes.values()) for (const tape of box.tapes) tape.visible = on
+  }
+
   function setPlace(place) {
     document.body.dataset.place = place
     document.body.dataset.room = here.box || ''
@@ -315,6 +325,7 @@ async function start() {
     const loading = prepare(id)
     here.box = id
     here.look = null
+    labels(false)
     pan = -Infinity // start at the left end of the room
     setPlace('room')
     overlay.say(box.data.label)
@@ -327,6 +338,7 @@ async function start() {
     } catch (error) {
       // the room would not load (offline, say): back out to the shelf rather than strand the camera
       here.box = null
+      labels(true)
       setPlace('shelf')
       history.replaceState(null, '', '#/')
       await rig.go(shelf.frame(), { duration: 0.8, lift: 0 })
@@ -351,6 +363,7 @@ async function start() {
     await room.close()
     here.box = null
     here.look = null
+    labels(true)
     rig.parallax = 1
     setPlace('shelf')
     aimLamp(shelf.frame())

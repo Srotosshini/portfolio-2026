@@ -38,9 +38,11 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `label-games`, `label-photography`, `label-creative-coding`, `label-design`, `label-research`, `label-about` | the six masking-tape labels |
 | `label-unbuilt` | the "still cutting this one out" strip |
 | `shelf-jar`, `shelf-roll` | loose things on the shelf |
-| `cabinet-snikisnak`, `cabinet-patchwork`, `cabinet-duckie`, `cabinet-park`, `cabinet-jam` | the five cereal-box cabinets |
-| `claw-machine`, `claw` | the machine (cut the glass out) and the claw |
+| `cabinet-snikisnak`, `cabinet-patchwork`, `cabinet-duckie`, `cabinet-park`, `cabinet-jam`, `cabinet-red-dot-rescue` | the cabinets, each made from a cardboard box: the name lettered in marker, the screen cut right out, bottle-cap buttons, a taped joystick |
+| `claw-machine`, `claw` | the cardboard claw machine (cut the glass out) and the claw |
 | `character-1`, `character-2`, `character-3` | characters hanging in the claw machine |
+| `poster-snikisnak`, `poster-patchwork`, `poster-duckie` | the posters of your games on the arcade wall (the first three games) |
+| `ticket-counter`, `fun-pass` | the ticket counter (its ticket machine on top, at the right) and the fun pass propped on it |
 | `coin` | the paper coin |
 | `cutout-spatial-equity` | the quiet cutout for Spatial Equity |
 | `reel`, `reel-stand`, `crank` | photography: a film reel (cut its holes out), what it stands on, and the handle on the right-hand one |
@@ -74,13 +76,13 @@ If your projector drawing puts the lens or the slide slot somewhere other than t
 |---|---|
 | `paper.jpg` | the wall behind the shelf, and the paper cards |
 | `cardboard.jpg` | the shelf and the outside of every box |
-| `black-card.jpg` | inside the arcade and the dark box |
+| `arcade-wall.jpg`, `carpet.jpg` | the arcade: its cardboard walls, and its patterned paper carpet |
 | `velvet.jpg`, `manila.jpg` | inside photography, and art and research |
 | `night.jpg`, `snow.jpg` | the design box: its walls (the night sky), and its snowy floor |
 | `masking-tape.png` | the name strip and the tape buttons |
 | `index-card.jpg` | the index card |
 | `lining-<box>.jpg` | the inside of one box, if it should differ (`lining-about.jpg`) |
-| `back-<box>.jpg` | a drawing that fills one box's back wall (`back-games.jpg` replaces the stand-in neon) |
+| `back-<box>.jpg` | a drawing that fills one box's back wall |
 | `film-strip.png` | one frame's width of film, sprocket holes cut out (transparent), repeated along the strip |
 | `display-case.jpg` | the inside of the creative coding display case |
 | `counter-mat.jpg` | the mat on its counter, one whole picture, wide (about 2.3 : 1) |

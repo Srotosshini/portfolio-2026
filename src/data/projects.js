@@ -29,6 +29,9 @@ export const site = {
     soundIsOn: 'sound on',
     soundIsOff: 'sound off',
     claw: 'claw machine',
+    tickets: 'tickets', // on the arcade's ticket counter
+    funPass: 'fun pass',
+    ticketCounter: 'ticket counter',
     windBack: 'wind the film back',
     windOn: 'wind the film on',
     noscript: 'The shelf needs JavaScript. Everything is also in the',

@@ -1417,7 +1417,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
   }
 
   const bySlug = (slug) => sketches.find((s) => s.slug === slug)
-  const boxLabel = box.tapes[0]
 
   return {
     async open() {
@@ -1425,7 +1424,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
       dimmer.visible = false
       relayout()
       layer.hidden = false
-      if (boxLabel) boxLabel.visible = false // the counter pulls out right where it is stuck on
       setBack(site.ui.toShelf)
       // the cellophane slides up
       const front = box.front
@@ -1494,7 +1492,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
         await stepped.poses([0.85, 0.62, 0.38, 0.18, 0.06, 0], (k) => (front.mesh.position.y = front.y + k * front.height))
         front.clip.set(new V3(0, -1, 0), 1e5) // clips nothing again
       }
-      if (boxLabel) boxLabel.visible = true
       mode = 'closed'
     },
 

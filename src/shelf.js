@@ -30,7 +30,7 @@ const SIZES = {
 // collector's display case, with a cardboard frame and a cellophane front.
 // `floor`: a floor of its own (the market's snow).
 const LINING = {
-  games: { scan: 'black-card', draw: 'black' },
+  games: { scan: 'arcade-wall', draw: 'arcade', floor: { scan: 'carpet', draw: 'carpet' } },
   about: { draw: 'periwinkle' },
   photography: { scan: 'velvet', draw: 'velvet' },
   'creative-coding': { scan: 'display-case', draw: 'display', case: true },
@@ -194,34 +194,6 @@ export async function buildShelf({ stepped }) {
     ground.position.set(0, 0.004, -d / 2 + 0.2)
     box.add(ground)
 
-    // The arcade's neon. A stand-in: her own back wall (textures/back-games.jpg) replaces it.
-    let neon = null
-    if (data.id === 'games' && !drawnBack) {
-      const { tubes, glow } = sketch.neon()
-      const size = new THREE.PlaneGeometry(w - 2 * T - 0.3, h - 2 * T - 0.16)
-      const sign = new THREE.Mesh(size, new THREE.MeshBasicMaterial({ map: texture(tubes), transparent: true, depthWrite: false }))
-      const halo = new THREE.Mesh(
-        size,
-        new THREE.MeshBasicMaterial({ map: texture(glow), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-      )
-      halo.position.set(0, h / 2, -d + T + 0.008)
-      sign.position.set(0, h / 2, -d + T + 0.014)
-      body.add(halo, sign)
-      neon = {
-        level: 1,
-        set(level) {
-          neon.level = level
-          sign.material.opacity = level
-          halo.material.opacity = level * 0.6
-        },
-        // tubes catching: a few uneven blinks, then on
-        strike() {
-          return stepped.poses([0.25, 0, 0.7, 0.2, 1, 0.75, 1], neon.set)
-        },
-      }
-      neon.set(1)
-    }
-
     // Masking-tape label, stuck over the bottom edge. It sits well clear of the
     // board's front edge, so the box's slight twist never tucks one end behind it.
     const tapes = []
@@ -262,7 +234,7 @@ export async function buildShelf({ stepped }) {
     let hovered = false
 
     boxes.set(data.id, {
-      id: data.id, data, group: box, body, tapes, neon, ground, front, w, h, d,
+      id: data.id, data, group: box, body, tapes, ground, front, w, h, d,
       // where things stand inside: floor height, back wall, usable width and height
       inner: { w: w - 2 * T, h: h - 2 * T, floor: T, back: -d + T },
       // corners of the opening in world space, for the hotspot button
@@ -404,8 +376,7 @@ export async function buildShelf({ stepped }) {
 
   // ---- the opening --------------------------------------------------------
   // Stop-motion set dressing: the boxes are set down on the shelf one after
-  // another, their tape is pressed on, the neon catches, and the loose things
-  // stand up.
+  // another, their tape is pressed on, and the loose things stand up.
   const looseThings = stack(Object.values(details))
   for (const piece of looseThings) piece.setFold(0) // standing, unless the opening lays them down
   let run = 0
@@ -420,7 +391,6 @@ export async function buildShelf({ stepped }) {
         tape.visible = true
         tape.scale.set(1, 1, 1)
       }
-      box.neon?.set(1)
     }
     for (const piece of looseThings) {
       piece.setFold(0)
@@ -446,7 +416,6 @@ export async function buildShelf({ stepped }) {
       box.group.visible = false
       box.ground.visible = false
       for (const tape of box.tapes) tape.visible = false
-      box.neon?.set(0)
     }
     for (const piece of looseThings) piece.setFold(piece.flat)
 
@@ -473,27 +442,10 @@ export async function buildShelf({ stepped }) {
             tape.scale.setScalar(scale)
           }
         })
-        if (live()) box.neon?.strike()
       }),
     )
     if (live()) await popUp(stepped, looseThings)
     if (live()) settle()
-  }
-
-  // The neon is never quite steady: every so often a tube dips for a frame or two.
-  const sign = boxes.get('games')?.neon
-  let dip = []
-  if (sign) {
-    stepped.every(1, () => {
-      if (sign.level === 0) return false
-      if (dip.length) {
-        sign.set(dip.shift())
-        return 'looks' // the tubes cast no shadow
-      }
-      if (rand() > 0.025) return false
-      dip = [0.45, 1, 0.7, 1]
-      return false
-    })
   }
 
   return {
