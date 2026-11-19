@@ -879,6 +879,19 @@ export function lining(kind) {
       return sheet(P.paper, 2, { n: 2600, long: 26, dark: '120,105,80', strength: 0.8 }).c
     case 'black':
       return sheet(P.blackCard, 3, { n: 2600, long: 30, dark: '0,0,0', light: '120,120,140', strength: 0.7 }).c
+    case 'night': {
+      // the market's walls: a night sky, with a scatter of tiny stars
+      const { c, ctx, r } = sheet('#1d2752', 12, { n: 2400, long: 20, dark: '5,8,25', light: '120,135,210', strength: 0.7 })
+      for (let i = 0; i < 260; i++) {
+        ctx.fillStyle = `rgba(255,248,220,${0.3 + r() * 0.5})`
+        ctx.beginPath()
+        ctx.arc(r() * 1024, r() * 1024, 0.8 + r() * 1.6, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      return c
+    }
+    case 'snow':
+      return sheet('#eef2fb', 13, { n: 2600, long: 24, dark: '120,135,170', light: '255,255,255', strength: 0.8 }).c
     case 'display':
       // the inside of the display case: dark blue card, a little like felt
       return sheet('#26305a', 10, { n: 4200, long: 18, dark: '8,12,36', light: '150,165,235', strength: 0.75 }).c
@@ -908,24 +921,6 @@ export function lining(kind) {
         ctx.arc(r() * 1024, r() * 1024, 2.5 + r() * 6, 0, Math.PI * 2)
         ctx.fill()
       }
-      return c
-    }
-    case 'mat': {
-      const { c, ctx } = sheet(P.mat, 7, { n: 1400, long: 20, dark: '10,50,30', light: '150,220,190', strength: 0.6 })
-      const rule = (step, alpha, lw) => {
-        ctx.strokeStyle = `rgba(255,255,255,${alpha})`
-        ctx.lineWidth = lw
-        ctx.beginPath()
-        for (let p = 0; p <= 1024; p += step) {
-          ctx.moveTo(0, p)
-          ctx.lineTo(1024, p)
-          ctx.moveTo(p, 0)
-          ctx.lineTo(p, 1024)
-        }
-        ctx.stroke()
-      }
-      rule(32, 0.16, 1)
-      rule(256, 0.4, 2.5)
       return c
     }
     case 'manila': {

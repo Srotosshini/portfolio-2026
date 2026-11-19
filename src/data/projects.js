@@ -59,7 +59,7 @@ export const boxes = [
   { id: 'games', label: 'Games', built: true },
   { id: 'photography', label: 'Photography', built: true },
   { id: 'creative-coding', label: 'Creative coding', built: true },
-  { id: 'design', label: 'Design', built: false },
+  { id: 'design', label: 'Design', built: true },
   { id: 'research', label: 'Art and research', built: false },
   { id: 'about', label: 'About', built: true },
 ]

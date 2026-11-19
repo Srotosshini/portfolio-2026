@@ -56,6 +56,14 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `case-sign` | creative coding: the "please don't touch (jk, touch everything)" sign |
 | `case-note` | creative coding: the "pick a pack and rip it open" note |
 | `binder` | creative coding: the binder standing on the counter, cover facing you (the count is taped on for you) |
+| `stall-<slug>` | design: a market stall's front (`stall-jewelry`, …), on a sheet the shape of the stand-in's: the walls and the pointed gable, with the door and the window cut right out where the stand-in has them |
+| `sign-<slug>` | design: the sign over a stall, in your lettering |
+| `decor-<slug>` | design: what hangs on a stall's front: the velvet bunting, the resin ornaments, the bike-wheel wreath (on the door), the lanterns |
+| `tag-<slug>` | design: optional, the tag that pops up over a stall (otherwise its name and one line are written for you) |
+| `market-moon`, `market-star`, `market-tree`, `market-tree-star`, `market-lamp`, `market-garland` | design: the moon, a star for the sky, the Christmas tree and its star, a street lamp, the pine garland along the top |
+| `market-mug`, `market-steam`, `market-sled`, `market-robin`, `market-robin-hop` | design: the mug on a window sill and its steam (draw two or three tracings: it rises), the sled, the robin standing and mid-hop (same size of sheet for both) |
+| `market-note` | design: the "click a stall to go inside" note hanging from the lights |
+| `market-back`, `market-case` | design: the "← back to the market" sign inside every stall, and the case study note pinned up in it |
 | `self-portrait` | About |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
@@ -67,7 +75,8 @@ If your projector drawing puts the lens or the slide slot somewhere other than t
 | `paper.jpg` | the wall behind the shelf, and the paper cards |
 | `cardboard.jpg` | the shelf and the outside of every box |
 | `black-card.jpg` | inside the arcade and the dark box |
-| `velvet.jpg`, `cutting-mat.jpg`, `manila.jpg` | inside photography, design, art and research |
+| `velvet.jpg`, `manila.jpg` | inside photography, and art and research |
+| `night.jpg`, `snow.jpg` | the design box: its walls (the night sky), and its snowy floor |
 | `masking-tape.png` | the name strip and the tape buttons |
 | `index-card.jpg` | the index card |
 | `lining-<box>.jpg` | the inside of one box, if it should differ (`lining-about.jpg`) |
@@ -108,7 +117,22 @@ No sketch runs on the site itself. Each card's picture is a short recording, in 
 
 Until a card's clip is there, a stand-in pattern plays in its picture. The cards a visitor has opened are kept in their binder (in their browser) for next time.
 
-**Sound** is off until the visitor turns it on (the switch beside "hold still"). The card shop's foil crinkle, tear, card flick, sparkle and binder snap are made in the browser, so there are no sound files.
+**Design** (the Christmas market) is in [src/data/design.js](src/data/design.js): a stall per project, left to right, each with its sign, trim colour, what hangs on its front, one line, its case study (the problem, what you made, how, what you learned), and what is inside (`interiorType`: `jewelry`, `resin`, `workshop`, `classroom`, or `shop` for a plain display table). Adding a stall is adding an entry. Each stall's files go in `public/design/<slug>/`:
+
+| File | What it is |
+|---|---|
+| `cover.jpg` | a photo for the list page |
+| `piece-1.png`, `piece-2.png`, … | jewelry and resin: a photo of each piece, cut out (transparent PNG); also shown small in the stall's window |
+| `piece-1.mp4` … | jewelry: optional, a short video of the piece turning; on its stand, dragging turns it back and forth |
+| `piece-1-process-1.jpg` … | resin: a few process photos per piece (moulds, pigments, the pour) |
+| `sketch-1.jpg` … | jewelry: design sketches, pinned to the cork board |
+| `product.png` | bloompath: the product, cut out; where its numbered tags go (and what they say) is under `hotspots` |
+| `research-1.jpg`, `user-notes-1.jpg`, `sketch-1.jpg` | bloompath: taped up on the workshop wall |
+| `page-1.jpg`, `page-2.jpg`, … | wild china: the module's pages, in order; the desks open them as a workbook |
+
+The module's title and goal (for the blackboard) are under `module` in the data file. Until a file is there, a stand-in drawing takes its place.
+
+**Sound** is off until the visitor turns it on (the switch beside "hold still"). Every sound is made in the browser, so there are no sound files: the card shop's foil crinkle, tear, card flick, sparkle and binder snap; the market's sleigh bells, door creak, shop bell, footsteps in the snow and the wind.
 
 ## Writing
 
@@ -128,11 +152,14 @@ list.html             the plain list (baked at build time, works without JavaScr
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
 src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, about.js)
+src/data/design.js    the Christmas market's stalls and words
 src/data/sets.js      the creative coding booster packs, one per semester
 src/data/sketches.js  the cards (your sketches) and the card shop's words
 src/lib/trading-cards.js  the cards themselves (HTML over the scene), the binder, a card held up big
 src/lib/shop.js       stand-in drawings for the card shop; nothing here should survive
 src/lib/sketches.js   stand-in pictures for the cards; nothing here should survive
+src/lib/market.js     stand-in drawings for the Christmas market; nothing here should survive
+src/lib/market-ui.js  the paper overlays inside the stalls (case study, workbook, notes, magnifier)
 src/lib/sound.js      the sound switch's sounds
 src/lib/paper.js      cutout, tab, shadow, pop-up, line boil
 src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the floor

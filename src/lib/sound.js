@@ -1,7 +1,9 @@
 // Sound. Off until the visitor turns it on with the switch in the corner
 // (the brief: optional, off by default). Every sound is made on the spot with
-// Web Audio, so there are no files to load: foil crinkle and tear, a card
-// flick, a sparkle for a chase card, the snap of a binder ring.
+// Web Audio, so there are no files to load. The card shop: foil crinkle and
+// tear, a card flick, a sparkle for a chase card, the snap of a binder ring.
+// The Christmas market: sleigh bells, a door's creak and its shop bell,
+// footsteps in snow, and the wind, which keeps blowing while you are there.
 let audio = null
 const listeners = new Set()
 
@@ -62,6 +64,105 @@ const SOUNDS = {
     noise(ctx, t, { length: 0.025, freq: 4000, q: 1.5, level: 0.3 })
     tone(ctx, t + 0.005, 1750, { length: 0.18, level: 0.05, type: 'triangle' })
   },
+  // sleigh bells: a few bright, quick jangles
+  jingle(ctx, t) {
+    for (let i = 0; i < 6; i++) {
+      const at = t + i * 0.045 + Math.random() * 0.02
+      for (const f of [2800, 3550, 4200]) tone(ctx, at, f * (0.97 + Math.random() * 0.06), { length: 0.18, level: 0.022 })
+      noise(ctx, at, { length: 0.03, freq: 7000, q: 1.5, level: 0.05 })
+    }
+  },
+  // the bell over a shop door: one ring, and its overtone, fading
+  bell(ctx, t) {
+    tone(ctx, t, 1320, { length: 1.4, level: 0.07 })
+    tone(ctx, t, 2666, { length: 0.9, level: 0.028 })
+    tone(ctx, t + 0.12, 1320, { length: 1, level: 0.035 })
+  },
+  // a wooden door's creak: a low rasp that slides up and back down
+  creak(ctx, t) {
+    const osc = ctx.createOscillator()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(140, t)
+    osc.frequency.linearRampToValueAtTime(230, t + 0.25)
+    osc.frequency.linearRampToValueAtTime(110, t + 0.55)
+    const wobble = ctx.createOscillator()
+    wobble.frequency.value = 23
+    const depth = ctx.createGain()
+    depth.gain.value = 30
+    wobble.connect(depth).connect(osc.frequency)
+    const band = ctx.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 900
+    band.Q.value = 3
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.0001, t)
+    gain.gain.exponentialRampToValueAtTime(0.05, t + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6)
+    osc.connect(band).connect(gain).connect(ctx.destination)
+    for (const node of [osc, wobble]) {
+      node.start(t)
+      node.stop(t + 0.65)
+    }
+  },
+  // a footstep in snow: a soft, muffled crunch
+  step(ctx, t) {
+    noise(ctx, t, { length: 0.14, freq: 600, q: 0.7, level: 0.2, sweep: 0.6 })
+    noise(ctx, t + 0.02, { length: 0.08, freq: 2400, q: 1.2, level: 0.045 })
+  },
+}
+
+// Sounds that keep going while they are wanted (and sound is on).
+const AMBIENT = {
+  // the wind in the market street: noise through a band that slowly wanders
+  wind(ctx) {
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    const band = ctx.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 480
+    band.Q.value = 0.8
+    const drift = ctx.createOscillator()
+    drift.frequency.value = 0.13
+    const depth = ctx.createGain()
+    depth.gain.value = 240
+    drift.connect(depth).connect(band.frequency)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0, ctx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 1.5)
+    source.connect(band).connect(gain).connect(ctx.destination)
+    source.start()
+    drift.start()
+    return {
+      stop() {
+        const now = ctx.currentTime
+        gain.gain.cancelScheduledValues(now)
+        gain.gain.setValueAtTime(gain.gain.value, now)
+        gain.gain.linearRampToValueAtTime(0, now + 0.6)
+        source.stop(now + 0.7)
+        drift.stop(now + 0.7)
+      },
+    }
+  },
+}
+const ambients = new Map() // name -> { wanted, playing }
+function syncAmbient() {
+  for (const [name, a] of ambients) {
+    const want = a.wanted && sound.on
+    if (want && !a.playing) {
+      try {
+        a.playing = AMBIENT[name](context())
+      } catch {
+        // no Web Audio here
+      }
+    } else if (!want && a.playing) {
+      a.playing.stop()
+      a.playing = null
+    }
+  }
 }
 
 export const sound = {
@@ -69,6 +170,14 @@ export const sound = {
   set(on) {
     sound.on = on
     for (const listener of listeners) listener(on)
+    syncAmbient()
+  },
+  // keep a sound going (the wind) while `on`, whenever sound is switched on
+  ambient(name, on) {
+    const a = ambients.get(name) || { wanted: false, playing: null }
+    a.wanted = on
+    ambients.set(name, a)
+    syncAmbient()
   },
   // fn(on) whenever the switch changes
   listen(fn) {
@@ -86,7 +195,8 @@ export const sound = {
       // no Web Audio here
     }
   },
-  // play one of: crinkle, tear, flick, sparkle, snap (nothing when sound is off)
+  // play one of: crinkle, tear, flick, sparkle, snap, jingle, bell, creak, step
+  // (nothing when sound is off)
   play(name) {
     if (!sound.on) return
     try {

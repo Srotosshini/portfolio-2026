@@ -28,12 +28,13 @@ const SIZES = {
 // textures/lining-<box>.jpg for the walls, and textures/back-<box>.jpg for a
 // drawing that fills the back wall. `case`: not an open shoebox but a
 // collector's display case, with a cardboard frame and a cellophane front.
+// `floor`: a floor of its own (the market's snow).
 const LINING = {
   games: { scan: 'black-card', draw: 'black' },
   about: { draw: 'periwinkle' },
   photography: { scan: 'velvet', draw: 'velvet' },
   'creative-coding': { scan: 'display-case', draw: 'display', case: true },
-  design: { scan: 'cutting-mat', draw: 'mat' },
+  design: { scan: 'night', draw: 'night', floor: { scan: 'snow', draw: 'snow' } },
   research: { scan: 'manila', draw: 'manila' },
 }
 
@@ -136,6 +137,9 @@ export async function buildShelf({ stepped }) {
     const inside = new THREE.MeshLambertMaterial({
       map: scan([`lining-${data.id}`, lining.scan], () => sketch.lining(lining.draw)),
     })
+    const floorLook = lining.floor
+      ? new THREE.MeshLambertMaterial({ map: scan([`floor-${data.id}`, lining.floor.scan], () => sketch.lining(lining.floor.draw)) })
+      : inside
     // the back wall can carry a drawing of its own, shown whole
     const drawnBack = has(`back-${data.id}`)
     const backWall = drawnBack
@@ -153,7 +157,7 @@ export async function buildShelf({ stepped }) {
       mesh.castShadow = mesh.receiveShadow = true
       body.add(mesh)
     }
-    slab(w, T, d, 0, T / 2, -d / 2, 2) // floor
+    slab(w, T, d, 0, T / 2, -d / 2, 2, { material: floorLook }) // floor
     slab(w, T, d, 0, h - T / 2, -d / 2, 3) // top
     slab(T, h - 2 * T, d, -w / 2 + T / 2, h / 2, -d / 2, 0, { upright: true }) // left
     slab(T, h - 2 * T, d, w / 2 - T / 2, h / 2, -d / 2, 1, { upright: true }) // right

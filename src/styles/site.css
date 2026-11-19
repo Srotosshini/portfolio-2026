@@ -1301,6 +1301,339 @@ body[data-place='item'] .shop-ui {
   }
 }
 
+/* ------------------------------------------------------ the christmas market */
+
+/* the market's paper overlays: a sheet out over the stall, the stall dimmed behind */
+.market-ui {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+.market-ui.is-modal {
+  background: rgba(14, 18, 40, 0.6);
+  pointer-events: auto;
+}
+.market-ui > * {
+  pointer-events: auto;
+}
+.market-sheet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
+  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35), 3px 10px 18px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%) rotate(-0.8deg);
+}
+.market-sheet.is-in {
+  animation: sheet-in 0.33s steps(4) both;
+}
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-0.8deg);
+  }
+}
+/* a strip of tape you can pull to put something away */
+.paper-tab {
+  position: absolute;
+  min-height: 40px;
+  padding: 0.3rem 1rem;
+  border: 0;
+  background: var(--tape) var(--tex-tape, none) center / cover;
+  color: var(--navy);
+  font-size: 1.05rem;
+  cursor: pointer;
+  transform: rotate(2deg);
+}
+
+/* the case study, taped up */
+.case-study {
+  width: min(34rem, calc(100vw - 2rem));
+  padding: 1.7rem 1.8rem 1.4rem;
+  overflow: visible;
+}
+.case-study::before,
+.case-study::after {
+  content: '';
+  position: absolute;
+  top: -0.7rem;
+  width: 5rem;
+  height: 1.6rem;
+  background: var(--tape) var(--tex-tape, none) center / cover;
+  opacity: 0.92;
+}
+.case-study::before {
+  left: 1.4rem;
+  transform: rotate(-6deg);
+}
+.case-study::after {
+  right: 1.4rem;
+  transform: rotate(5deg);
+}
+.case-kicker {
+  margin: 0;
+  color: var(--pencil);
+  font-size: 1.1rem;
+}
+.case-study h2 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+}
+.case-study h3 {
+  margin: 1rem 0 0.2rem;
+  font-size: 1.3rem;
+}
+.case-study p {
+  margin: 0;
+}
+.case-study .paper-button {
+  margin-top: 1.3rem;
+}
+
+/* a piece, big, with its process photos to pick from */
+.viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(14rem, 1fr);
+  gap: 1.2rem;
+  width: min(60rem, calc(100vw - 2rem));
+  padding: 1.2rem;
+}
+.viewer-picture {
+  display: grid;
+  place-items: center;
+  min-height: 18rem;
+  margin: 0;
+  padding: 1rem;
+  border-radius: 4px;
+  background: radial-gradient(circle at 50% 45%, #ffffff 0, var(--tint, var(--card)) 78%);
+}
+.viewer-picture img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+}
+.viewer-words h2 {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 1.8rem;
+}
+.viewer-note {
+  margin: 0 0 1rem;
+}
+.viewer-label {
+  margin: 0 0 0.4rem;
+  color: var(--pencil);
+}
+.viewer-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1.2rem;
+  padding: 0;
+  list-style: none;
+}
+.viewer-strip button {
+  width: 4.6rem;
+  height: 4.6rem;
+  padding: 0.2rem;
+  border: 2px solid transparent;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.viewer-strip button[aria-current] {
+  border-color: var(--navy);
+}
+.viewer-strip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* the classroom's workbook */
+.workbook {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.2rem 1.2rem 1rem;
+  background-color: #f3ead6;
+}
+.workbook-page {
+  perspective: 60rem;
+}
+.workbook-page img {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 12rem);
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform-origin: left center;
+}
+.workbook-page.is-turning img {
+  animation: page 0.42s steps(5) both;
+}
+.workbook-turn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0.4rem;
+}
+.workbook-turn .paper-button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.workbook-count {
+  font-size: 1.15rem;
+}
+.workbook-close {
+  display: block;
+  margin: 0.4rem auto 0;
+}
+
+/* a numbered tag's note, beside it */
+.note-pop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(19rem, calc(100vw - 2rem));
+  padding: 1.3rem 1.1rem 1rem 1.2rem;
+  background: #fff3a6;
+  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35), 2px 6px 10px rgba(0, 0, 0, 0.3);
+}
+.note-pop h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.3rem;
+}
+.note-pop p {
+  margin: 0;
+}
+.note-n {
+  position: absolute;
+  top: -0.9rem;
+  left: -0.6rem;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: 1.2rem;
+}
+.note-pop .paper-tab {
+  top: -1.1rem;
+  right: 0.6rem;
+}
+
+/* beside a jewellery piece on its stand */
+.piece-card {
+  position: absolute;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem;
+  background: var(--card) var(--tex-paper, none) top left / 34rem auto;
+  box-shadow: 0 1px 0 rgba(60, 45, 20, 0.35), 2px 6px 10px rgba(0, 0, 0, 0.3);
+  transform: rotate(1deg);
+}
+.piece-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.4rem;
+}
+.piece-note {
+  margin: 0 0 0.4rem;
+}
+.piece-hint {
+  margin: 0 0 0.7rem;
+  color: var(--pencil);
+}
+.turn-spot {
+  cursor: grab;
+}
+.turn-spot:active {
+  cursor: grabbing;
+}
+
+/* the magnifier */
+.loupe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 140px;
+  height: 140px;
+  border: 5px solid #3a3a46;
+  border-radius: 50%;
+  background: #f4e8ec no-repeat;
+  box-shadow: 0 0 0 3px #d9c38a, 3px 6px 10px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.loupe::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -40px;
+  width: 16px;
+  height: 56px;
+  border-radius: 6px;
+  background: #3a3a46;
+  transform: rotate(-45deg);
+}
+
+/* snow rushing past as you step in */
+.swirl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.swirl i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: -0.6rem;
+  background: #f4f7ff;
+  clip-path: polygon(50% 0, 58% 38%, 93% 25%, 64% 50%, 93% 75%, 58% 62%, 50% 100%, 42% 62%, 7% 75%, 36% 50%, 7% 25%, 42% 38%);
+  opacity: 0;
+}
+.swirl.is-on i {
+  animation: swirl 0.8s steps(8) both;
+}
+@keyframes swirl {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.2);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.9;
+    transform: translate(var(--x), var(--y)) scale(calc(var(--s) * 3)) rotate(200deg);
+  }
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .viewer {
+    grid-template-columns: 1fr;
+  }
+  .piece-card {
+    left: 1rem;
+    right: 1rem;
+    bottom: 4rem;
+    width: auto;
+  }
+}
+
 /* ------------------------------------------------------------- less motion */
 
 :root[data-motion='off'] #card,
@@ -1312,7 +1645,10 @@ body[data-place='item'] .shop-ui {
 :root[data-motion='off'] .tcard.is-sweep .tcard-sheen,
 :root[data-motion='off'] .tcard-spark,
 :root[data-motion='off'] .binder-page.is-turning,
-:root[data-motion='off'] .sleeve.is-arriving {
+:root[data-motion='off'] .sleeve.is-arriving,
+:root[data-motion='off'] .market-sheet.is-in,
+:root[data-motion='off'] .workbook-page.is-turning img,
+:root[data-motion='off'] .swirl.is-on i {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {

@@ -1376,10 +1376,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     const video = view?.entry.card.video
     if (video) video.muted = !on
   })
-  // the first press in the room wakes the audio, before the click it belongs to does anything
-  const warmSound = () => mode !== 'closed' && sound.warm()
-  addEventListener('pointerdown', warmSound, true)
-  addEventListener('keydown', warmSound, true)
 
   // ---- the buttons over the packs in the case --------------------------------------------------
   const zone = (pack) => {
@@ -1517,7 +1513,9 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
       else if (last.from === 'binder') binder.focusSleeve(last.slug)
     },
     // Escape, or the tape button: close the binder, or step back from the counter
-    escape() {
+    // (with a card held up big, main.js closes that instead)
+    escape(item) {
+      if (item) return false
       if (binderOpen) {
         closeBinder()
         return true

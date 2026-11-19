@@ -5,6 +5,7 @@
 import { site, boxes, projects, about, photos } from '../data/projects.js'
 import { sketches, words } from '../data/sketches.js'
 import { sets } from '../data/sets.js'
+import { stalls, words as market } from '../data/design.js'
 
 const TODO = /^TODO:\s*/
 export const isTodo = (s) => typeof s === 'string' && TODO.test(s)
@@ -90,6 +91,7 @@ export function photoList(files = []) {
 export function itemExists(box, id, files = []) {
   if (projects.some((p) => p.box === box && p.id === id)) return true
   if (box === 'creative-coding') return sketches.some((s) => s.slug === id)
+  if (box === 'design') return stalls.some((s) => s.slug === id)
   return box === 'photography' && photoList(files).some((p) => p.id === id)
 }
 
@@ -143,6 +145,7 @@ export function renderList(files = []) {
       if (!b.built) return `<section class="room unbuilt">${head}<p class="hand note">${esc(site.ui.unbuilt)}</p></section>`
       const inBox = `<p class="see"><a class="hand" href="./#/${b.id}">${esc(site.ui.seeInBox)}</a></p>`
       if (b.id === 'creative-coding') return `<section class="room" id="${b.id}">${head}${renderSets(files)}</section>`
+      if (b.id === 'design') return `<section class="room" id="${b.id}">${head}${renderStalls(files)}</section>`
       if (b.id === 'photography') {
         const real = photoList(files).filter((p) => p.real)
         const prints = real.map((p) => {
@@ -194,6 +197,18 @@ function renderSets(files) {
     .join('\n')
 }
 
+// Design in the list: a card per market stall, with its cover photo, its one
+// line, and the way into its stall.
+function renderStalls(files) {
+  return stalls
+    .map((s) => {
+      const cover = files.includes(s.cover) ? `<img class="sketch-loop" src="${esc(s.cover)}" alt="" loading="lazy" decoding="async">` : ''
+      const line = text(s.oneLiner)
+      return `<article class="card sketch-card" id="${esc(s.slug)}">${cover}<div><h3 class="hand title">${esc(s.title)}</h3>${line ? `<p>${line}</p>` : ''}<p class="see"><a class="hand" href="./#/design/${esc(s.slug)}">${esc(market.goInside)}</a></p></div></article>`
+    })
+    .join('\n')
+}
+
 // Her handwriting font and her scanned papers, when the files exist.
 function headStyle(files) {
   const find = (stem) => files.find((f) => f.startsWith(stem + '.'))
@@ -227,5 +242,5 @@ export function fillPage(html, { files = [], list = false } = {}) {
 export function countTodos() {
   const count = (v) =>
     typeof v === 'string' ? Number(isTodo(v)) : v && typeof v === 'object' ? Object.values(v).reduce((n, x) => n + count(x), 0) : 0
-  return count(site) + count(projects) + count(about) + count(sketches)
+  return count(site) + count(projects) + count(about) + count(sketches) + count(stalls)
 }

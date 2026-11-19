@@ -19,10 +19,18 @@ import { buildShelf } from './shelf.js'
 //   narrow: on a tall screen, how much of a whole room's width stays in view
 //   inPlace: an opened item is held up over the room by the room itself (a
 //            trading card); the camera stays where it is
+//   bare:    an opened item has no paper card: the camera goes to it and the
+//            room shows its own buttons (inside a market stall). On a narrow
+//            screen it can be swiped sideways, like a room.
+//   perUnit: on a narrow screen, at most this many pixels across per scene unit
+//            (how close the camera comes before the room has to be swiped)
+//   early:   made as soon as the shelf has settled, so its box shows its
+//            scene (the market) without anyone pointing at it first
 const ROOMS = {
   games: { load: () => import('./rooms/arcade.js') },
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
   'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
+  design: { load: () => import('./rooms/design.js'), bare: true, early: true, focus: 0.42, fit: 1.04, perUnit: 150 },
   about: { load: () => import('./rooms/about.js'), card: true },
 }
 
@@ -196,6 +204,7 @@ async function start() {
     return making.get(id)
   }
   let busy = false
+  let roomPan = 0 // where the room was panned to, while an item is open
   let pan = 0 // sideways offset inside a room, on screens too narrow to show it all
   let slack = 0 // how far it can pan either way
 
@@ -206,8 +215,19 @@ async function start() {
     // a room that cannot pan is still allowed to crop its own side walls on a tall screen
     const w = ROOMS[box.id].whole
       ? full.w * (innerWidth < innerHeight ? (ROOMS[box.id].narrow ?? 0.8) : 1)
-      : Math.min(full.w, Math.max(innerWidth / 108, full.h * rig.camera.aspect))
+      : Math.min(full.w, Math.max(innerWidth / (ROOMS[box.id].perUnit ?? 108), full.h * rig.camera.aspect))
     slack = ROOMS[box.id].whole ? 0 : (full.w - w) / 2
+    pan = THREE.MathUtils.clamp(pan, -slack, slack)
+    return { ...full, w, cx: full.cx + pan }
+  }
+
+  // The part of an opened item the camera frames. In a bare room, an item too
+  // wide for a narrow screen is framed by its height and can be swiped across.
+  function itemRect(room, id) {
+    const full = room.view(id)
+    if (!ROOMS[here.box].bare) return full
+    const w = Math.min(full.w, full.h * rig.camera.aspect)
+    slack = (full.w - w) / 2
     pan = THREE.MathUtils.clamp(pan, -slack, slack)
     return { ...full, w, cx: full.cx + pan }
   }
@@ -216,6 +236,7 @@ async function start() {
     if (!here.box) return { rect: shelf.frame(), region: FULL, lift: 0 }
     const room = rooms.get(here.box)
     const conf = ROOMS[here.box]
+    if (here.item && room && conf.bare) return { rect: itemRect(room, here.item), region: FULL, lift: ROOM_LIFT }
     if (here.item && room && !conf.inPlace) return { rect: room.view(here.item), region: overlay.stageRegion(), lift: 0 }
     if (here.look) return { rect: here.look.rect(), region: FULL, lift: here.look.lift }
     return { rect: roomRect(shelf.boxes.get(here.box)), region: conf.card ? overlay.stageRegion() : FULL, lift: ROOM_LIFT }
@@ -278,7 +299,8 @@ async function start() {
     document.body.dataset.room = here.box || ''
     const back = overlay.el.back
     back.hidden = place === 'shelf'
-    back.textContent = place === 'item' ? ui.toRoom : ui.toShelf
+    // a room may name its own way back ("back to the market")
+    back.textContent = (here.box && rooms.get(here.box)?.backLabel?.(place)) || (place === 'item' ? ui.toRoom : ui.toShelf)
     // name the tab after where we are, so history and bookmarks make sense
     const where = here.item ? rooms.get(here.box).title(here.item) : here.box && shelf.boxes.get(here.box).data.label
     document.title = where ? `${where} · ${site.name}` : site.name
@@ -348,6 +370,20 @@ async function start() {
       await room.show(id)
       return
     }
+    if (ROOMS[here.box].bare) {
+      // the room opens its own door; the camera goes in after it
+      roomPan = pan
+      pan = 0
+      await room.start(id)
+      rig.parallax = 0
+      here.item = id
+      setPlace('item')
+      await veil(true)
+      await rig.go(itemRect(room, id), { duration: 1.1, lift: ROOM_LIFT })
+      veil(false)
+      room.show(id)
+      return
+    }
     await room.start(id) // the coin drops, or the slide goes into the projector
     rig.parallax = 0 // square on and still, so a clip lines up with its screen
     here.item = id
@@ -380,9 +416,12 @@ async function start() {
       overlay.showSpots(here.box)
       return
     }
-    await overlay.hideCard()
+    const bare = ROOMS[here.box].bare
+    if (bare) await room.hide()
+    else await overlay.hideCard()
     here.item = null
     rig.parallax = 1
+    if (bare) pan = roomPan
     setPlace('room')
     await veil(true)
     await rig.go(roomRect(shelf.boxes.get(here.box)), { duration: 1, lift: ROOM_LIFT })
@@ -417,7 +456,7 @@ async function start() {
   // Back one step. A room can take the step itself first (the card shop: out
   // of its binder, or from the counter back to the case).
   const stepBack = () => {
-    if (here.box && !here.item && rooms.get(here.box)?.escape?.()) return
+    if (here.box && rooms.get(here.box)?.escape?.(here.item)) return
     goTo(here.item ? `#/${here.box}` : '#/')
   }
   overlay.el.back.addEventListener('click', stepBack)
@@ -434,7 +473,7 @@ async function start() {
   let drag = null
   addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') rig.point((e.clientX / innerWidth) * 2 - 1, 1 - (e.clientY / innerHeight) * 2)
-    if (here.box && !here.item) rooms.get(here.box)?.pointer?.(e.clientX / innerWidth) // foil catches the light as it moves
+    if (here.box && !here.item) rooms.get(here.box)?.pointer?.(e.clientX / innerWidth, e.clientY / innerHeight) // foil catches the light; snow shies away
     if (!drag) return
     if (!drag.moved && Math.abs(e.clientX - drag.x) < 8) return
     if (!drag.moved) document.body.classList.add('is-dragging')
@@ -447,10 +486,11 @@ async function start() {
     drag.last = e.clientX
   })
   addEventListener('pointerdown', (e) => {
-    if (!here.box || here.item || busy) return
+    if (!here.box || busy || (here.item && !ROOMS[here.box].bare)) return
     const room = rooms.get(here.box)
-    if (!room?.drag && !slack) return
-    drag = { x: e.clientX, last: e.clientX, pan, moved: false, scale: rig.unitsPerPixel(innerHeight), room: room?.drag ? room : null }
+    const roomDrags = !here.item && room?.drag
+    if (!roomDrags && !slack) return
+    drag = { x: e.clientX, last: e.clientX, pan, moved: false, scale: rig.unitsPerPixel(innerHeight), room: roomDrags ? room : null }
   })
   const endDrag = () => {
     document.body.classList.remove('is-dragging')
@@ -472,7 +512,7 @@ async function start() {
   )
   // keyboard: bring a focused cabinet into view if the room is panned away from it
   addEventListener('focusin', (e) => {
-    if (!slack || !here.box || here.item || !e.target.classList?.contains('hotspot')) return
+    if (!slack || !here.box || (here.item && !ROOMS[here.box].bare) || !e.target.classList?.contains('hotspot')) return
     const r = e.target.getBoundingClientRect()
     if (r.left >= 0 && r.right <= innerWidth) return
     pan += ((r.left + r.right) / 2 - innerWidth / 2) * rig.unitsPerPixel(innerHeight)
@@ -490,6 +530,7 @@ async function start() {
   })()
   function setMotion(off) {
     stepped.reduced = rig.reduced = overlay.reduced = off
+    for (const room of rooms.values()) room.motion?.(off) // (the market's snow stops falling)
     document.documentElement.dataset.motion = off ? 'off' : 'on'
     motion.textContent = off ? ui.startMotion : ui.stopMotion
     if (off) shelf.settle()
@@ -520,6 +561,9 @@ async function start() {
       }
     })(),
   )
+  // the audio takes a moment to wake: let it, on a press, before what the press starts
+  addEventListener('pointerdown', () => sound.warm(), true)
+  addEventListener('keydown', () => sound.warm(), true)
   soundSwitch.addEventListener('click', () => {
     setSound(!sound.on)
     sound.warm()
@@ -601,6 +645,10 @@ async function start() {
       renderer
         .compileAsync(kinds, rig.camera, scene)
         .catch(() => {})
+        .then(() => {
+          // the rooms whose boxes show their scene from the shelf
+          for (const [id, conf] of Object.entries(ROOMS)) if (conf.early && shelf.boxes.get(id)?.data.built) prepare(id).catch(() => {})
+        })
         .finally(() => {
           scene.remove(kinds)
           kinds.traverse((o) => {
