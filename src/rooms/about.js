@@ -345,7 +345,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   room.add(envelope)
   const envBody = makeFlat(envelopeArt, { width: 0.2 })
   envelope.add(envBody.mesh)
-  const letter = makeFlat(letterArt, { width: 0.17 })
+  const letter = makeFlat(letterArt, { width: 0.17, later: true })
   letter.mesh.position.set(0, 0, -0.004)
   envelope.add(letter.mesh)
   const flapHinge = new THREE.Group()
@@ -354,7 +354,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   const flap = makeFlat(flapArt, { width: 0.2 })
   flap.mesh.position.y = -flap.height / 2
   flapHinge.add(flap.mesh)
-  const bizCard = makeFlat(cardArt, { width: 0.13 })
+  const bizCard = makeFlat(cardArt, { width: 0.13, later: true })
   bizCard.mesh.visible = false
   room.add(bizCard.mesh)
   // the lamp's light: a glow at the shade and a pool on the desk (light, not paper: it shows at night)
@@ -392,7 +392,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   suitcase.group.position.set(1.52, 0, -0.44)
   suitcase.group.rotation.y = -0.18
   room.add(suitcase.group)
-  const slip = makeFlat(slipArt, { width: 0.4 })
+  const slip = makeFlat(slipArt, { width: 0.4, later: true })
   slip.mesh.position.set(0, suitcase.height - 0.08, -0.04)
   slip.mesh.visible = false
   suitcase.hinge.add(slip.mesh)
@@ -407,7 +407,9 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   // ---- her cat --------------------------------------------------------------------------------------------
   // one paper cut out, its drawing swapped for each mood; pupils that follow the pointer; eyelids to blink
   const catPose = {}
-  for (const [k, preps] of Object.entries(catArts)) catPose[k] = { map: texture(preps[0].front), aspect: preps[0].aspect }
+  // (only its resting moods go to the graphics card straight away; the others once it is quiet)
+  const resting = ['loaf', 'sleep', 'tail']
+  for (const [k, preps] of Object.entries(catArts)) catPose[k] = { map: texture(preps[0].front, { later: !resting.includes(k) }), aspect: preps[0].aspect }
   const CAT_H = { loaf: 0.37, happy: 0.37, sleep: 0.35, belly: 0.37, stretch: 0.37, yawn: 0.37, sit: 0.5, walk1: 0.37, walk2: 0.37, swat: 0.37 }
   const CAT_HOME = V(-0.02, 0, -0.32)
   const cat = new THREE.Group()
@@ -475,7 +477,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
 
   // ---- little things that float up: hearts, notes, z's ----------------------------------------------------------
   const sparkPreps = { heart: heartArt[0], z: zeeArt[0], noteA: noteA[0], noteB: noteB[0] }
-  const sparkMaps = Object.fromEntries(Object.entries(sparkPreps).map(([k, prep]) => [k, { map: texture(prep.front), aspect: prep.aspect }]))
+  const sparkMaps = Object.fromEntries(Object.entries(sparkPreps).map(([k, prep]) => [k, { map: texture(prep.front, { later: true }), aspect: prep.aspect }]))
   const sparks = Array.from({ length: 40 }, () => {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
     mesh.visible = false
@@ -721,9 +723,9 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   }
 
   // ---- a polaroid off the board, held up big --------------------------------------------------------------------------
-  const bigFace = canvas(640, 768)
+  const bigFace = canvas(860, 1032)
   const bigMap = texture(bigFace)
-  const bigPhoto = canvas(560, 560)
+  const bigPhoto = canvas(760, 760)
   let viewing3d = null
   async function showPolaroid(pol) {
     if (!idle() || pol === taking) return
@@ -923,7 +925,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
       await walkCat(CAT_HOME)
     } else if (pick === 'swat' && !stepped.reduced) {
       // a toy on a string dangles down; the cat swats at it
-      toy = toy || makeFlat(toyArt, { height: 0.5 })
+      toy = toy || makeFlat(toyArt, { height: 0.5, later: true })
       toy.mesh.castShadow = false
       room.add(toy.mesh)
       const top = V(cat.position.x - 0.12, 0.75, cat.position.z + 0.03)

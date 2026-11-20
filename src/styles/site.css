@@ -1990,3 +1990,142 @@ body[data-room='about'] .hotspot[data-tag]:focus-visible::after {
     opacity: 0;
   }
 }
+
+/* ------------------------------------------------------------- the load screen */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.9rem;
+  background: var(--paper) var(--tex-paper, none) top left / 34rem auto;
+  color: var(--navy);
+  transition: opacity 0.55s ease, visibility 0.55s;
+}
+.loader.is-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.loader-name {
+  margin: 0.2rem 0 0;
+  font-size: clamp(2.2rem, 7vw, 3.4rem);
+  transform: rotate(-2deg);
+}
+.loader-note {
+  min-height: 1.6em;
+  margin: 0;
+  color: var(--pencil);
+  font-size: 1.2rem;
+}
+/* a little cardboard box: its flaps open, something pops out, they close (in 12 fps steps) */
+.loader-box {
+  position: relative;
+  width: 132px;
+  height: 118px;
+}
+.loader-body {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 70px;
+  border: 3px solid var(--navy);
+  border-radius: 4px 4px 6px 6px;
+  background: #c69b6d linear-gradient(to bottom, transparent 0 12px, rgba(80, 50, 20, 0.12) 12px 15px, transparent 15px);
+}
+.loader-flap {
+  position: absolute;
+  top: 45px;
+  width: 54px;
+  height: 22px;
+  border: 3px solid var(--navy);
+  border-radius: 3px;
+  background: #d8a873;
+}
+.loader-flap.left {
+  left: 12px;
+  transform-origin: 2px 100%;
+  animation: loader-flap-left 2.4s steps(1) infinite;
+}
+.loader-flap.right {
+  right: 12px;
+  transform-origin: calc(100% - 2px) 100%;
+  animation: loader-flap-right 2.4s steps(1) infinite;
+}
+.loader-pop {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  width: 38px;
+  height: 38px;
+  margin-left: -19px;
+  background: #f2c75c;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: loader-pop 2.4s steps(1) infinite;
+}
+@keyframes loader-flap-left {
+  0% { transform: rotate(0deg); }
+  12% { transform: rotate(-40deg); }
+  18% { transform: rotate(-95deg); }
+  24%, 66% { transform: rotate(-150deg); }
+  72% { transform: rotate(-90deg); }
+  78% { transform: rotate(-30deg); }
+  84%, 100% { transform: rotate(0deg); }
+}
+@keyframes loader-flap-right {
+  0% { transform: rotate(0deg); }
+  12% { transform: rotate(40deg); }
+  18% { transform: rotate(95deg); }
+  24%, 66% { transform: rotate(150deg); }
+  72% { transform: rotate(90deg); }
+  78% { transform: rotate(30deg); }
+  84%, 100% { transform: rotate(0deg); }
+}
+@keyframes loader-pop {
+  0%, 24% { transform: translateY(14px) scale(0.2); opacity: 0; }
+  30% { transform: translateY(-14px) scale(0.8) rotate(-8deg); opacity: 1; }
+  36% { transform: translateY(-30px) scale(1.1) rotate(6deg); opacity: 1; }
+  42%, 54% { transform: translateY(-26px) scale(1) rotate(0deg); opacity: 1; }
+  60% { transform: translateY(-6px) scale(0.7); opacity: 1; }
+  66%, 100% { transform: translateY(14px) scale(0.2); opacity: 0; }
+}
+/* a strip of masking tape that grows as each room is made */
+.loader-tape {
+  width: min(15rem, 66vw);
+  height: 1.05rem;
+  margin-top: 0.3rem;
+  background: rgba(29, 42, 91, 0.1);
+  clip-path: polygon(0 12%, 100% 0, 99% 88%, 1% 100%);
+}
+.loader-tape i {
+  display: block;
+  width: calc(var(--progress, 0.06) * 100%);
+  height: 100%;
+  background: var(--tape) var(--tex-tape, none) center / cover;
+  transition: width 0.42s steps(5, end);
+}
+:root[data-motion='off'] .loader *,
+:root[data-motion='off'] .loader {
+  animation: none;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader *,
+  .loader {
+    animation: none;
+    transition: none;
+  }
+}
+/* held still: the box stays open with the star out */
+:root[data-motion='off'] .loader-flap.left { transform: rotate(-150deg); }
+:root[data-motion='off'] .loader-flap.right { transform: rotate(150deg); }
+:root[data-motion='off'] .loader-pop { transform: translateY(-26px); }
+@media (prefers-reduced-motion: reduce) {
+  .loader-flap.left { transform: rotate(-150deg); }
+  .loader-flap.right { transform: rotate(150deg); }
+  .loader-pop { transform: translateY(-26px); }
+}

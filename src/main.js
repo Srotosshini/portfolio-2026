@@ -4,8 +4,8 @@ import { site } from './data/projects.js'
 import { createStepped } from './lib/stepped.js'
 import { createRig, FULL } from './lib/camera.js'
 import { createOverlay } from './lib/overlay.js'
-import { boil, PALETTE, unsent } from './lib/paper.js'
-import { files, onAssetLoaded, turn } from './lib/assets.js'
+import { boil, PALETTE, unsent, later } from './lib/paper.js'
+import { files, onAssetLoaded, turn, setBudget } from './lib/assets.js'
 import { itemExists } from './lib/pages.js'
 import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
@@ -47,6 +47,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms))
 start().catch((error) => {
   // No WebGL (or something broke): the list view has everything.
   console.error(error)
+  document.querySelector('#loader')?.remove()
   if (!import.meta.env.DEV) location.replace('list.html')
 })
 
@@ -64,39 +65,62 @@ async function start() {
   // the camera does, so they are redrawn on demand (see `shadowsStale`).
   renderer.shadowMap.autoUpdate = false
 
-  // How sharp the picture is. A slow graphics chip lowers it, a step at a
-  // time, whenever camera moves start dropping frames, so the glide stays a
-  // glide. The level it settles on is remembered for the next visit.
+  // How sharp the picture is: the screen's own pixel density (up to 2). A
+  // slow graphics chip lowers it a step at a time when camera glides start
+  // dropping frames, so the glide stays a glide, and raises it again once
+  // they run smoothly. Frames drawn while a room is being made do not count:
+  // that slowness is the room being made, not the chip.
+  let building = 0 // rooms being made right now
+  let loading = true // the load screen is up
   const quality = {
-    best: Math.min(devicePixelRatio, 1.5),
+    best: Math.min(devicePixelRatio || 1, 2),
+    floor: Math.min(devicePixelRatio || 1, 1) * 0.8,
     ratio: 1,
     slow: 0,
+    fast: 0,
     set(ratio) {
       quality.ratio = ratio
       renderer.setPixelRatio(ratio)
       renderer.setSize(innerWidth, innerHeight, false)
     },
+    remember() {
+      try {
+        localStorage.setItem('sharpness', String(quality.ratio))
+      } catch {}
+    },
     // judged only on frames drawn back to back while the camera moves; a
     // frame over 400 ms is a paused or hidden tab, not a slow chip
     sample(frameMs) {
-      if (frameMs > 400) return
-      quality.slow = frameMs > 42 ? quality.slow + 1 : Math.max(0, quality.slow - 1)
-      if (quality.slow < 6 || quality.ratio <= 0.6) return
-      quality.slow = 0
-      quality.set(Math.max(0.6, quality.ratio * 0.75))
-      try {
-        localStorage.setItem('detail', String(quality.ratio))
-      } catch {}
+      if (frameMs > 400 || building > 0 || loading) return
+      if (frameMs > 45) {
+        quality.slow++
+        quality.fast = 0
+      } else {
+        quality.slow = Math.max(0, quality.slow - 1)
+        if (frameMs < 22) quality.fast++
+      }
+      if (quality.slow >= 8 && quality.ratio > quality.floor) {
+        quality.slow = 0
+        quality.set(Math.max(quality.floor, quality.ratio * 0.8))
+        quality.remember()
+      } else if (quality.fast >= 120 && quality.ratio < quality.best) {
+        quality.fast = 0
+        quality.set(Math.min(quality.best, quality.ratio / 0.8))
+        quality.remember()
+      }
     },
   }
+  try {
+    localStorage.removeItem('detail') // (the old setting, which only ever went down)
+  } catch {}
   const remembered = (() => {
     try {
-      return parseFloat(localStorage.getItem('detail'))
+      return parseFloat(localStorage.getItem('sharpness'))
     } catch {
       return NaN
     }
   })()
-  quality.set(remembered > 0 ? Math.min(remembered, quality.best) : quality.best)
+  quality.set(remembered > 0 ? Math.min(quality.best, Math.max(quality.floor, remembered)) : quality.best)
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(PALETTE.paper)
@@ -182,6 +206,7 @@ async function start() {
   const making = new Map()
   function prepare(id) {
     if (!making.has(id)) {
+      building++
       const box = shelf.boxes.get(id)
       const before = new Set(box.body.children)
       // Keep the new room out of sight until it is whole and can be drawn
@@ -206,12 +231,14 @@ async function start() {
             if (next) renderer.initTexture(next)
           }
           for (const child of added) child.visible = true
+          building--
           rooms.set(id, room)
           redraw()
           return room
         })
       made.catch((error) => {
         console.error(error)
+        building = Math.max(0, building - 1)
         making.delete(id) // could not load (offline?): try again next time
       })
       making.set(id, made)
@@ -646,16 +673,64 @@ async function start() {
     renderer.render(scene, rig.camera)
   })
 
+  // The load screen stays up while the rooms are made, one after another, so
+  // every box is set down with its whole scene in it. (Never longer than a
+  // few seconds: whatever is not ready by then appears as soon as it is.)
+  const loader = document.querySelector('#loader')
+  const loaderNote = loader?.querySelector('.loader-note')
+  const doing = {
+    games: 'stuffing the plushies',
+    photography: 'hanging the velvet curtains',
+    'creative-coding': 'stacking the booster packs',
+    design: 'letting it snow',
+    about: 'teaching the cat to purr',
+  }
+  const early = Object.keys(ROOMS).filter((id) => ROOMS[id].early && shelf.boxes.get(id)?.data.built)
+  let made = 0
+  const done = new Set()
+  const progress = () => loader?.style.setProperty('--progress', String(0.12 + (0.88 * made) / early.length))
+  // what it says it is doing: each room still being made, in turn
+  let saying = 0
+  const say = () => {
+    const left = early.filter((id) => !done.has(id))
+    if (loaderNote) loaderNote.textContent = left.length ? doing[left[saying++ % left.length]] || 'cutting out the boxes' : 'setting out the shelf'
+  }
+  const sayTimer = setInterval(say, 1100)
+  document.querySelector('main').inert = true
+  setBudget(80) // (nothing on screen needs to move smoothly: the load screen's box is CSS)
+  progress()
+  // (side by side: one's drawings are cut out while another's shaders compile)
+  const allMade = Promise.all(
+    early.map((id) =>
+      prepare(id)
+        .catch(() => {})
+        .then(() => {
+          made++
+          done.add(id)
+          progress()
+        }),
+    ),
+  )
+  await Promise.race([allMade, sleep(12000)])
+  clearInterval(sayTimer)
+  setBudget(11)
+  loading = false
+  document.querySelector('main').inert = false
+  loader?.classList.add('is-done')
+  setTimeout(() => loader?.remove(), 700)
+  // then, a frame at a time, what only shows once someone does something
+  ;(async () => {
+    await sleep(1500)
+    while (later.length) {
+      await turn()
+      const next = later.shift()
+      if (next) renderer.initTexture(next)
+    }
+  })()
+
   // Arriving on the plain address plays the opening; a link straight to a box
   // or a project goes straight there.
   const arrived = wanted().box ? settle() : shelf.playIntro()
-
-  // Make the rooms while the opening plays, one after another in the order
-  // their boxes are set down: each box shows its whole scene as soon as its
-  // room is ready, then starts its loop.
-  Object.keys(ROOMS)
-    .filter((id) => ROOMS[id].early && shelf.boxes.get(id)?.data.built)
-    .reduce((before, id) => before.then(() => prepare(id).catch(() => {})), Promise.resolve())
 
   // Once the shelf has settled, in a still moment, compile the kinds of shader
   // the rooms use (light beams, dust, glows, paper scraps), so the first box

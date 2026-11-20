@@ -40,14 +40,27 @@ export function canvas(w, h) {
   return c
 }
 
-export function texture(source) {
+// `later`: only wanted once someone does something (a cat's other moods, a
+// letter out of its envelope): sent to the graphics card after the rest.
+// A sheet that only ever becomes a texture: kept on the graphics card, which
+// makes sending it to WebGL a quick copy (never read it back with getImageData).
+export function cardCanvas(w, h) {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  return c
+}
+
+export function texture(source, { later: afterwards = false } = {}) {
   const t = new THREE.Texture(source)
   t.colorSpace = THREE.SRGBColorSpace
-  t.anisotropy = 4
+  t.anisotropy = 8 // (floors and walls seen at a slant stay sharp)
   t.needsUpdate = true
-  unsent.push(t)
+  ;(afterwards ? later : unsent).push(t)
   return t
 }
+// textures for what only shows once someone does something; main.js sends them when it is quiet
+export const later = []
 // Textures not yet handed to the graphics card. main.js sends a room's over a
 // frame at a time before the room is first seen, rather than all in its first
 // frame (which a modest graphics chip shows as a freeze).
@@ -84,7 +97,7 @@ export function fillArea(map, imageAspect, areaAspect) {
 // the arcade uses to find each cabinet's screen.
 // `trim: false` keeps the whole sheet, so drawings made on the same size of
 // sheet (the poses of a figure) stay the same size and line up.
-export function prepCutout(source, { edge = 5, maxSize = 1024, trim = true } = {}) {
+export function prepCutout(source, { edge = 5, maxSize = 2048, trim = true } = {}) {
   const sw = source.naturalWidth || source.width
   const sh = source.naturalHeight || source.height
   const scale = Math.min(1, maxSize / Math.max(sw, sh))
@@ -117,27 +130,36 @@ export function prepCutout(source, { edge = 5, maxSize = 1024, trim = true } = {
   // the paper's cut edge: the silhouette grown by `edge` pixels, white on
   // the front, the back of the paper behind
   const rim = edge > 0 ? grow(px, w, h, ox, oy, W, H, edge) : null
-  const front = canvas(W, H)
+  const front = cardCanvas(W, H)
   let ctx = front.getContext('2d')
   if (rim) ctx.putImageData(fillMask(ctx, rim, PALETTE.cut), 0, 0)
   ctx.drawImage(work, ox, oy)
 
-  const back = canvas(W, H)
-  ctx = back.getContext('2d')
-  if (rim) ctx.putImageData(fillMask(ctx, rim, PALETTE.paperBack), 0, 0)
-  else {
-    ctx.drawImage(front, 0, 0)
-    ctx.globalCompositeOperation = 'source-in'
-    ctx.fillStyle = PALETTE.paperBack
-    ctx.fillRect(0, 0, W, H)
+  // the back of the paper: only made for a piece that shows it (a standing cutout)
+  let back = null
+  const makeBack = () => {
+    const b = cardCanvas(W, H)
+    const bctx = b.getContext('2d')
+    bctx.drawImage(front, 0, 0)
+    bctx.globalCompositeOperation = 'source-in'
+    bctx.fillStyle = PALETTE.paperBack
+    bctx.fillRect(0, 0, W, H)
+    bctx.globalCompositeOperation = 'source-atop'
+    bctx.globalAlpha = 0.07
+    bctx.drawImage(front, 0, 0)
+    return b
   }
-  ctx.globalCompositeOperation = 'source-atop'
-  ctx.globalAlpha = 0.07
-  ctx.drawImage(work, ox, oy)
 
   const hole = findWindow(px, w, h)
   const window = hole && { x: (hole.x + ox) / W, y: (hole.y + oy) / H, w: hole.w / W, h: hole.h / H }
-  return { front, back, aspect: W / H, window }
+  return {
+    front,
+    get back() {
+      return (back ||= makeBack())
+    },
+    aspect: W / H,
+    window,
+  }
 }
 
 // Everything within `edge` pixels of the drawing (`px`, w × h, placed at
@@ -351,11 +373,11 @@ export function makeHinged(width, height) {
 }
 
 // A flat cutout with no hinge, tab or shadow: tape labels, coins, things on strings.
-export function makeFlat(preps, { height, width } = {}) {
+export function makeFlat(preps, { height, width, later: afterwards = false } = {}) {
   const aspect = preps[0].aspect
   if (width == null) width = height * aspect
   if (height == null) height = width / aspect
-  const fronts = preps.map((p) => texture(p.front))
+  const fronts = preps.map((p) => texture(p.front, { later: afterwards }))
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), paperMaterial(fronts[0], THREE.DoubleSide))
   mesh.castShadow = mesh.receiveShadow = true
   const flat = {

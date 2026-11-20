@@ -56,7 +56,7 @@ export function puff(ctx, shape, color, { glow = 0.45, shade = 0.3, line, width 
   ctx.fillRect(x - 6, y - 6, w + 12, h + 12)
   if (fuzz) {
     const r = rng(seed * 131 + Math.round(x + y))
-    const n = Math.round(((w * h) / 70) * fuzz)
+    const n = Math.round(((w * h) / 150) * fuzz)
     ctx.lineCap = 'round'
     for (let i = 0; i < n; i++) {
       const px = x + r() * w

@@ -9,7 +9,7 @@ const T = 0.06 // cardboard thickness
 const BOARD = 0.2 // shelf board thickness
 const DEPTH = 3.1 // how deep the shelf is
 const HEADROOM = 0.45 // gap between a box and the board above it
-const TILE = 6 // a scanned sheet covers this much before it repeats
+const TILE = 3 // a scanned sheet covers this much before it repeats (small enough to stay sharp up close)
 
 // Opening width, opening height and depth of each box. Games is the big one.
 // Everything in a box folds forward to lie flat, so a box's depth is also the

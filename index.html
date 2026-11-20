@@ -16,6 +16,19 @@
     <!-- with motion off, a quick fade through paper covers each camera cut -->
     <div id="veil" aria-hidden="true"></div>
 
+    <!-- the load screen: up until the shelf and its rooms are ready -->
+    <div id="loader" class="loader" role="status">
+      <div class="loader-box" aria-hidden="true">
+        <i class="loader-pop"></i>
+        <i class="loader-flap left"></i>
+        <i class="loader-flap right"></i>
+        <i class="loader-body"></i>
+      </div>
+      <p class="loader-name hand">{{name}}</p>
+      <div class="loader-tape" aria-hidden="true"><i></i></div>
+      <p class="loader-note hand">cutting out the boxes</p>
+    </div>
+
     <header class="masthead">
       <h1 class="hand">{{name}}</h1>
     </header>

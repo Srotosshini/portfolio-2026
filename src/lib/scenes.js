@@ -549,6 +549,23 @@ const PLACES = {
   },
 }
 
+// Her, shrunk once to the size a scene draws her at (drawing a big sheet small
+// is slow, and many cities share a pose).
+const shrunk = new WeakMap()
+function sized(her, px) {
+  const h = Math.max(8, Math.round(px))
+  let byHeight = shrunk.get(her)
+  if (!byHeight) shrunk.set(her, (byHeight = new Map()))
+  if (!byHeight.has(h)) {
+    const c = canvas(Math.max(4, Math.round((h * her.width) / her.height)), h)
+    const cx = c.getContext('2d')
+    cx.imageSmoothingQuality = 'high'
+    cx.drawImage(her, 0, 0, c.width, c.height)
+    byHeight.set(h, c)
+  }
+  return byHeight.get(h)
+}
+
 // A scene, drawn onto `target` (any size): the place, then her, then what is in front of her.
 export function scene(target, where, her, seed = 1) {
   const ctx = target.getContext('2d')
@@ -561,7 +578,7 @@ export function scene(target, where, her, seed = 1) {
   if (her) {
     const h = at.h
     const w = (h * her.width) / her.height
-    ctx.drawImage(her, at.x - w / 2, at.y - h * 0.06, w, h)
+    ctx.drawImage(sized(her, h * k), at.x - w / 2, at.y - h * 0.06, w, h)
   }
   placed.front?.(ctx)
   fibres(ctx)

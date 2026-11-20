@@ -62,7 +62,9 @@ export async function art(stem, placeholder, { edge = 5, tracings = 2, trim = tr
 // frame, more while the frame is still young. So the rooms are made quickly
 // while the page is quiet, and a camera glide keeps moving while one is being
 // made, instead of freezing and then jumping to the end.
-const BUDGET = 11 // milliseconds into a frame that slow work may carry on
+let BUDGET = 11 // milliseconds into a frame that slow work may carry on
+// (more while the load screen is up: nothing on screen is gliding then)
+export const setBudget = (ms) => (BUDGET = ms)
 const waiting = []
 let pumping = false
 let frameStart = 0
@@ -110,7 +112,7 @@ export function scan(names, placeholder, { tile = true } = {}) {
       redraw()
     })
     t.colorSpace = THREE.SRGBColorSpace
-    t.anisotropy = 4
+    t.anisotropy = 8
   } else {
     t = texture(placeholder())
   }
