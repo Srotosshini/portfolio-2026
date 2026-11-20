@@ -72,11 +72,14 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `market-mug`, `market-steam`, `market-sled`, `market-robin`, `market-robin-hop` | design: the mug on a window sill and its steam (draw two or three tracings: it rises), the sled, the robin standing and mid-hop (same size of sheet for both) |
 | `market-note` | design: the "click a stall to go inside" note hanging from the lights |
 | `market-back`, `market-case` | design: the "← back to the market" sign inside every stall, and the case study note pinned up in it |
-| `doodle` | About: your doodle, standing in your room. It is also the you in every polaroid, so one drawing changes them all |
+| `doodle`, `doodle-idle` | About: your doodle, making a peace sign for the camera (it is also the you in every polaroid, so one drawing changes them all), and the same you waiting between photos |
 | `selfie-camera` | About: your camera on its tripod, lens pointing left (toward you). If its countdown light, flash or photo slot are not where the stand-in has them, change `LIGHT`, `FLASH` and `SLOT` at the top of [src/rooms/about.js](src/rooms/about.js) |
-| `corkboard`, `room-desk` | About: the corkboard on the wall, the desk under it |
+| `corkboard`, `map`, `map-heart` | About: the corkboard on the wall, the map pinned to it (the stand-in is drawn to fit your places; a map of your own has to put them where the stand-in does), and the little heart that pops up on a place |
+| `backdrop-roller` | About: the wooden roller the painted backdrop hangs from (the backdrop itself is the place drawings below) |
+| `countdown-3`, `countdown-2`, `countdown-1`, `flash-burst` | About: the paper badges that pop up over the camera as it counts down, and the starburst when it flashes |
+| `memories-box`, `rug` | About: the shoebox the photos go into when the board is full, and the rug on the floor |
 | `pushpin` | About: a pushpin seen from the front (`pushpin-1`, `-2`, `-3` are used as three colours) |
-| `place-dhaka`, `place-abu-dhabi`, `place-shanghai`, `place-zhangjiajie` (`place-<name>`) | About: the places behind you in the polaroids, square. The list of places is `about.places` in [src/data/projects.js](src/data/projects.js); add a name there and a drawing here |
+| `place-dhaka`, `place-abu-dhabi`, `place-shanghai`, `place-zhangjiajie` (`place-<name>`) | About: the places, square: each hangs as the painted backdrop behind you, and is the background of its polaroid. The list of places is `about.places` in [src/data/projects.js](src/data/projects.js) (a name, and where it is for the map); add one there and a drawing here |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
 

@@ -1,6 +1,6 @@
 // Stand-in drawings for the About room, her room in miniature: her camera on
-// its tripod, the corkboard, the desk, the pushpins, and the places in her
-// polaroids. Like everything in placeholders.js, each one is replaced by her
+// its tripod, the corkboard and its map, the studio's backdrop roller and
+// countdown badges, the pushpins, and the places in her polaroids. Like everything in placeholders.js, each one is replaced by her
 // own drawing when the file exists (see the README); none of it is meant to
 // survive to the finished site. Her doodle itself is in placeholders.js.
 import { PALETTE as P, rng, canvas } from './paper.js'
@@ -96,38 +96,159 @@ export function pushpin(color = '#e0483e') {
   return c
 }
 
-// Her desk under the corkboard: a lamp, a plant, a few books, a mug.
-export function roomDesk(seed = 1) {
-  const c = canvas(1000, 700)
+// ------------------------------------------------------------------ the studio
+
+// The painted backdrop's roller: a wooden rod with round knobs.
+export function roller(seed = 1) {
+  const c = canvas(900, 70)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed)
-  const wood = '#dcb78c'
-  // legs and the drawers, then the top
-  m.rect(880, 330, 50, 360, '#c79f73')
-  m.rect(40, 330, 290, 360, wood)
-  for (const y of [350, 460, 570]) {
-    m.rect(60, y, 250, 96, '#e7c9a2', { width: 4 })
-    m.blob(185, y + 48, 16, 8, '#8d6440', { width: 3 })
-  }
-  m.rect(14, 292, 972, 44, '#e2bf95')
-  // the lamp, bent over the desk
-  m.blob(150, 286, 58, 12, '#f0cf5e', { width: 5 })
-  m.line([[150, 280], [196, 170], [262, 118]], { width: 9, color: '#e8c24f' })
-  m.shape([[226, 70], [318, 88], [300, 160], [214, 138]], '#f0cf5e', { width: 5 })
-  // books, lying and standing
-  m.rect(400, 248, 170, 44, '#7f9ccf', { width: 4 })
-  m.rect(412, 206, 150, 42, '#e58fa0', { width: 4 })
-  m.rect(600, 170, 34, 122, '#8ea37c', { width: 4 })
-  m.rect(636, 186, 30, 106, '#f0cf5e', { width: 4 })
-  // a mug, steam left out: it is a doodle
-  m.rect(700, 224, 52, 68, '#f6efe0', { width: 4 })
-  m.blob(758, 256, 14, 18, null, { width: 4 })
-  // the plant
-  m.shape([[800, 292], [890, 292], [880, 214], [810, 214]], '#c9744e')
-  const g = marker(ctx, seed + 5, { width: 5, color: '#2f5a37' })
-  for (const [x, y, rx, ry] of [[845, 140, 22, 62], [806, 166, 18, 48], [884, 168, 18, 48], [826, 110, 14, 40], [866, 108, 14, 40]]) g.blob(x, y, rx, ry, '#5d9a5a')
+  const m = marker(ctx, seed, { width: 5 })
+  m.rect(30, 20, 840, 30, '#b07a4a')
+  m.line([[40, 30], [860, 30]], { width: 3, color: 'rgba(255, 230, 190, 0.6)' })
+  m.blob(30, 35, 26, 28, '#8a5a34')
+  m.blob(870, 35, 26, 28, '#8a5a34')
+  return c
+}
+
+// a round paper badge with a big number on it, for the countdown
+export function badge(text, color, seed = 1) {
+  const c = canvas(220, 220)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 7 })
+  m.blob(110, 110, 96, 96, color)
+  m.blob(110, 110, 78, 78, null, { width: 3, color: 'rgba(255, 255, 255, 0.7)' })
+  write(ctx, text, 110, 116, { size: 120, max: 150, color: P.navy, weight: 700 })
   fibres(ctx)
   return c
+}
+
+// the flash going off: a paper starburst
+export function starburst(seed = 1) {
+  const c = canvas(300, 300)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 5, color: '#e0a23a' })
+  const r = rng(seed * 5)
+  const pts = []
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2
+    const rad = i % 2 ? 62 + r() * 10 : 132 + r() * 14
+    pts.push([150 + Math.cos(a) * rad, 150 + Math.sin(a) * rad])
+  }
+  m.shape(pts, '#fff3b0')
+  m.blob(150, 150, 56, 56, '#ffffff', { width: 3 })
+  return c
+}
+
+// a tiny red heart, for a place on the map once she has been
+export function heart(seed = 1) {
+  const c = canvas(80, 72)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 4, color: '#7a1420' })
+  const pts = []
+  for (let i = 0; i <= 24; i++) {
+    const t = (i / 24) * Math.PI * 2
+    pts.push([40 + 16 * Math.sin(t) ** 3 * 2, 32 - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 2])
+  }
+  m.shape(pts, '#d8333f')
+  return c
+}
+
+// the shoebox the old polaroids go into when the board is full
+export function memoryBox(seed = 1) {
+  const c = canvas(520, 330)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 6 })
+  m.shape([[30, 70], [490, 70], [470, 30], [50, 30]], '#9a6b42')
+  m.rect(20, 70, 480, 250, '#d3a779')
+  m.rect(110, 130, 300, 110, '#f3e9d2', { width: 4 })
+  write(ctx, 'memories', 260, 186, { size: 64, max: 270 })
+  m.shape(
+    Array.from({ length: 10 }, (_, i) => {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5
+      const rad = i % 2 ? 9 : 20
+      return [440 + Math.cos(a) * rad, 112 + Math.sin(a) * rad]
+    }),
+    '#f2c75c',
+    { width: 3 },
+  )
+  fibres(ctx)
+  return c
+}
+
+// a round braided rug
+export function rug(seed = 1) {
+  const c = canvas(700, 380)
+  const ctx = c.getContext('2d')
+  const rings = ['#e2a0a6', '#f3e2c0', '#8fb1e3', '#f3e2c0', '#e2a0a6', '#f2c75c', '#8fb1e3']
+  rings.forEach((col, i) => {
+    const k = 1 - i / rings.length
+    marker(ctx, seed + i, { width: 4, wobble: 1.2, color: 'rgba(80, 60, 50, 0.55)' }).blob(350, 190, 340 * k, 180 * k, col)
+  })
+  fibres(ctx)
+  return c
+}
+
+// ---- the map on the corkboard: the part of the world her places are in,
+// drawn as a doodle. Rough outlines of the land, in degrees (longitude, latitude).
+const LAND = [
+  [[-168, 65], [-140, 70], [-95, 72], [-80, 63], [-60, 55], [-52, 47], [-70, 43], [-76, 35], [-81, 25], [-97, 26], [-97, 19], [-87, 15], [-80, 8], [-92, 15], [-105, 20], [-112, 30], [-118, 34], [-124, 40], [-125, 49], [-135, 58], [-150, 60], [-165, 55]],
+  [[-55, 60], [-45, 60], [-20, 70], [-22, 82], [-60, 82], [-70, 77]],
+  [[-80, 8], [-62, 10], [-50, 2], [-35, -6], [-40, -22], [-48, -28], [-58, -38], [-65, -55], [-72, -50], [-74, -40], [-71, -18], [-81, -5]],
+  [[-10, 36], [-9, 43], [-1, 46], [-4, 48], [5, 51], [8, 54], [12, 56], [5, 58], [5, 62], [15, 69], [28, 71], [40, 67], [40, 48], [30, 46], [28, 41], [20, 40], [16, 38], [12, 44], [8, 44], [3, 43], [-5, 36]],
+  [[-17, 21], [-10, 30], [-5, 35], [10, 37], [20, 32], [32, 31], [35, 28], [43, 12], [51, 12], [42, -2], [40, -15], [35, -25], [20, -35], [17, -29], [12, -17], [9, -1], [8, 4], [-8, 5], [-17, 14]],
+  [[28, 41], [36, 36], [35, 32], [44, 15], [58, 22], [57, 26], [52, 25], [50, 30], [56, 27], [66, 25], [72, 21], [77, 8], [80, 15], [88, 22], [92, 21], [98, 16], [100, 4], [104, 1], [106, 10], [109, 19], [117, 23], [122, 31], [121, 39], [126, 39], [129, 35], [130, 43], [142, 47], [141, 53], [156, 58], [162, 63], [180, 66], [180, 72], [140, 73], [110, 77], [80, 73], [60, 70], [40, 67], [40, 48], [30, 46]],
+  [[114, -22], [122, -18], [130, -12], [137, -12], [142, -11], [146, -19], [153, -26], [150, -37], [141, -38], [131, -31], [115, -34]],
+  [[130, 31], [135, 34], [140, 36], [142, 40], [141, 45], [139, 40], [133, 34]],
+  [[-5, 50], [1, 51], [0, 53], [-3, 56], [-5, 58], [-6, 55]],
+  [[44, -25], [47, -25], [50, -15], [49, -12], [44, -17]],
+  [[95, 5], [105, -6], [115, -8], [120, -9], [110, -3], [100, 1]],
+  [[109, 1], [117, 7], [119, 1], [116, -4], [110, -2]],
+  [[120, 18], [122, 18], [126, 7], [124, 6], [121, 12]],
+  [[80, 9], [82, 7], [81, 6], [80, 7]],
+  [[172, -34], [178, -38], [174, -42], [167, -46], [172, -40]],
+]
+// the map's window onto the world: round all the places, with room to spare
+export function mapArea(places) {
+  const at = places.filter((p) => Number.isFinite(p.lon) && Number.isFinite(p.lat))
+  if (!at.length) return { lon0: -170, lon1: 190, lat0: -55, lat1: 80 }
+  let lon0 = Math.min(...at.map((p) => p.lon)) - 28
+  let lon1 = Math.max(...at.map((p) => p.lon)) + 28
+  let lat0 = Math.min(...at.map((p) => p.lat)) - 20
+  let lat1 = Math.max(...at.map((p) => p.lat)) + 20
+  // never narrower than this, and the shape of the paper (3 : 2)
+  const span = Math.max(lon1 - lon0, 110, (lat1 - lat0) * 1.5)
+  const midLon = (lon0 + lon1) / 2
+  const midLat = (lat0 + lat1) / 2
+  return { lon0: midLon - span / 2, lon1: midLon + span / 2, lat0: midLat - span / 3, lat1: midLat + span / 3 }
+}
+// where a place falls on the map, as fractions of the sheet (from the left, from the top)
+export const mapSpot = (area) => (p) => [(30 + ((p.lon - area.lon0) / (area.lon1 - area.lon0)) * 840) / 900, (30 + ((area.lat1 - p.lat) / (area.lat1 - area.lat0)) * 540) / 600]
+// the map itself: where each place is comes back from `spot(place)` as fractions of the sheet
+export function worldMap(area, seed = 1) {
+  const W = 900
+  const H = 600
+  const c = canvas(W, H)
+  const ctx = c.getContext('2d')
+  const m = marker(ctx, seed, { width: 5 })
+  const x = (lon) => 30 + ((lon - area.lon0) / (area.lon1 - area.lon0)) * (W - 60)
+  const y = (lat) => 30 + ((area.lat1 - lat) / (area.lat1 - area.lat0)) * (H - 60)
+  m.rect(10, 10, W - 20, H - 20, '#cfe3f2')
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(14, 14, W - 28, H - 28)
+  ctx.clip()
+  for (let i = 0; i < 6; i++) marker(ctx, 50 + i, { width: 2, color: 'rgba(80, 120, 170, 0.35)' }).line([[40, 80 + i * 90], [W - 40, 70 + i * 90]])
+  const land = marker(ctx, seed + 3, { width: 4, wobble: 1.4, color: '#4f6b3c' })
+  for (const outline of LAND) land.shape(outline.map(([lon, lat]) => [x(lon), y(lat)]), '#cbdca8')
+  ctx.restore()
+  m.rect(10, 10, W - 20, H - 20, null, { width: 6 })
+  // a compass rose in a corner
+  const cr = marker(ctx, seed + 8, { width: 3 })
+  cr.line([[W - 70, 90], [W - 70, 30]])
+  cr.line([[W - 100, 60], [W - 40, 60]])
+  write(ctx, 'N', W - 70, 22, { size: 26 })
+  fibres(ctx)
+  return { canvas: c, spot: (p) => [x(p.lon) / W, y(p.lat) / H] }
 }
 
 // ------------------------------------------------------------------ the polaroids

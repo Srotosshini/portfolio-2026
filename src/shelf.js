@@ -31,7 +31,7 @@ const SIZES = {
 // `floor`: a floor of its own (the market's snow).
 const LINING = {
   games: { scan: 'arcade-wall', draw: 'arcade', floor: { scan: 'carpet', draw: 'carpet' } },
-  about: { draw: 'periwinkle' },
+  about: { draw: 'wallpaper', floor: { draw: 'planks' } },
   photography: { scan: 'velvet', draw: 'velvet' },
   'creative-coding': { scan: 'display-case', draw: 'display', case: true },
   design: { scan: 'night', draw: 'night', floor: { scan: 'snow', draw: 'snow' } },

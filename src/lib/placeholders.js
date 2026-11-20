@@ -791,9 +791,10 @@ export function corrugated(vertical = false) {
 // bangs framing her face; dressed in blue, her favourite colour; a peace sign
 // for the camera. One sprite used everywhere she appears (standing in her
 // room, and in every polaroid), so her own drawing, drawings/doodle.png,
-// replaces all of them at once.
+// replaces all of them at once. `pose`: 'peace' (the one in the photos), or
+// 'idle' (her hands together in front, between photos: drawings/doodle-idle.png).
 export const DOODLE = { skin: '#9b6343', hair: '#24170f', blue: '#3f72d6', blush: 'rgba(236, 120, 130, 0.5)' }
-export function doodle(seed = 1) {
+export function doodle(seed = 1, pose = 'peace') {
   const c = canvas(420, 780)
   const ctx = c.getContext('2d')
   const m = marker(ctx, seed, { width: 6, wobble: 1.6 })
@@ -802,8 +803,10 @@ export function doodle(seed = 1) {
   m.shape([[116, 206], [122, 128], [160, 80], [210, 66], [260, 80], [298, 128], [304, 206], [310, 300], [318, 400], [306, 474], [272, 486], [262, 430], [158, 430], [148, 486], [114, 474], [102, 400], [110, 300]], hair)
   // neck, the arm at her side, her legs and shoes
   m.rect(196, 266, 28, 44, skin)
-  m.shape([[136, 330], [154, 338], [140, 470], [122, 466]], skin)
-  m.blob(130, 478, 15, 15, skin)
+  if (pose === 'peace') {
+    m.shape([[136, 330], [154, 338], [140, 470], [122, 466]], skin)
+    m.blob(130, 478, 15, 15, skin)
+  }
   for (const x of [178, 242]) {
     m.rect(x - 12, 590, 24, 118, skin)
     m.shape([[x - 20, 704], [x + 18, 704], [x + 24, 728], [x - 26, 728]], '#283a74')
@@ -815,11 +818,18 @@ export function doodle(seed = 1) {
   m.blob(270, 330, 28, 24, blue)
   m.blob(194, 310, 18, 11, '#ffffff', { width: 4 })
   m.blob(226, 310, 18, 11, '#ffffff', { width: 4 })
-  // the other arm, up, making a peace sign
-  m.shape([[262, 320], [286, 336], [334, 254], [316, 244]], skin)
-  m.blob(328, 238, 17, 17, skin)
-  m.shape([[318, 228], [324, 226], [314, 186], [306, 190]], skin, { width: 4 })
-  m.shape([[332, 226], [338, 228], [348, 190], [340, 186]], skin, { width: 4 })
+  if (pose === 'peace') {
+    // the other arm, up, making a peace sign
+    m.shape([[262, 320], [286, 336], [334, 254], [316, 244]], skin)
+    m.blob(328, 238, 17, 17, skin)
+    m.shape([[318, 228], [324, 226], [314, 186], [306, 190]], skin, { width: 4 })
+    m.shape([[332, 226], [338, 228], [348, 190], [340, 186]], skin, { width: 4 })
+  } else {
+    // both arms down, her hands together in front of her
+    m.shape([[138, 326], [158, 336], [196, 452], [180, 462]], skin)
+    m.shape([[282, 326], [262, 336], [224, 452], [240, 462]], skin)
+    m.blob(210, 462, 30, 18, skin)
+  }
   // her face
   m.blob(210, 194, 84, 90, skin)
   // the hair on top, parted in the middle
@@ -1276,6 +1286,53 @@ export function lining(kind) {
       return sheet('#26305a', 10, { n: 4200, long: 18, dark: '8,12,36', light: '150,165,235', strength: 0.75 }).c
     case 'periwinkle':
       return sheet(P.periwinkle, 4, { n: 2600, long: 26, dark: '60,70,150', light: '215,220,255' }).c
+    case 'wallpaper': {
+      // her room's wallpaper: cream, with tiny blue flowers in rows, and dots between
+      const { c, ctx, r } = sheet('#f3eadb', 31, { n: 2200, long: 22, dark: '140,120,90', light: '255,250,240', strength: 0.6 })
+      for (let row = 0; row < 16; row++) {
+        for (let col = 0; col < 16; col++) {
+          const x = col * 64 + (row % 2 ? 32 : 0) + 32
+          const y = row * 64 + 32
+          const m = marker(ctx, row * 17 + col, { color: '#8ea6dd', width: 2, wobble: 0.6 })
+          const turn = r()
+          for (let k = 0; k < 5; k++) {
+            const a = (k / 5) * Math.PI * 2 + turn
+            m.blob(x + Math.cos(a) * 6, y + Math.sin(a) * 6, 4.5, 4.5, '#c3d2f4', { width: 1.6 })
+          }
+          ctx.fillStyle = '#f0c766'
+          ctx.beginPath()
+          ctx.arc(x, y, 2.6, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = 'rgba(142, 166, 221, 0.5)'
+          ctx.beginPath()
+          ctx.arc(x + 32, y + 2, 2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      return c
+    }
+    case 'planks': {
+      // warm wooden floorboards
+      const { c, ctx, r } = sheet('#c48b57', 32, { n: 3000, long: 70, dark: '90,50,20', light: '240,200,150' })
+      for (let y = 0; y < 1024; y += 128) {
+        ctx.fillStyle = `rgba(${r() < 0.5 ? '120,70,30' : '230,180,120'}, 0.18)`
+        ctx.fillRect(0, y, 1024, 128)
+        ctx.fillStyle = 'rgba(70, 40, 15, 0.55)'
+        ctx.fillRect(0, y, 1024, 4)
+        const join = r() * 900
+        ctx.fillRect(join, y, 4, 128)
+        for (let k = 0; k < 6; k++) {
+          ctx.strokeStyle = 'rgba(90, 50, 20, 0.25)'
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          const gy = y + 12 + r() * 100
+          ctx.moveTo(0, gy)
+          ctx.bezierCurveTo(300, gy + (r() - 0.5) * 20, 700, gy + (r() - 0.5) * 20, 1024, gy)
+          ctx.stroke()
+        }
+      }
+      return c
+    }
     case 'velvet': {
       const { c, ctx, r } = sheet(P.maroon, 5, { n: 0 })
       // the nap of the cloth: fine upright strokes, and soft folds where it hangs

@@ -249,11 +249,17 @@ export const photos = {
 
 export const about = {
   title: 'About',
-  // The places in the polaroids her camera takes in the About box, in order.
-  // Add a place to add a polaroid (up to six fit on the corkboard at once).
-  // Each gets a stand-in drawing until there is one of her own:
+  // The places in the polaroids her camera takes in the About box, in order,
+  // with where each is (latitude, longitude) for the map on her corkboard.
+  // Add a place to add a polaroid (up to six fit on the board at once). Each
+  // gets a stand-in drawing until there is one of her own:
   // drawings/place-<name>.png, spaces as dashes (place-abu-dhabi.png).
-  places: ['dhaka', 'abu dhabi', 'shanghai', 'zhangjiajie'],
+  places: [
+    { name: 'dhaka', lat: 23.8, lon: 90.4 },
+    { name: 'abu dhabi', lat: 24.5, lon: 54.4 },
+    { name: 'shanghai', lat: 31.2, lon: 121.5 },
+    { name: 'zhangjiajie', lat: 29.1, lon: 110.5 },
+  ],
   bio: ['TODO: a short paragraph about you', 'TODO: what you are looking for (the internship)'],
   cv: 'cv.pdf',
   contact: [
