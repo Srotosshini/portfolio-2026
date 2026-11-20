@@ -31,7 +31,7 @@ const ROOMS = {
   photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, early: true, focus: 0.3, fit: 1.05 },
   'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, early: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
   design: { load: () => import('./rooms/design.js'), bare: true, early: true, focus: 0.42, fit: 1.04, perUnit: 150 },
-  about: { load: () => import('./rooms/about.js'), card: true, early: true },
+  about: { load: () => import('./rooms/about.js'), early: true, focus: 0.42, fit: 1.12, perUnit: 150 },
 }
 
 // Inside a box the camera sits a little above centre and looks down, the way

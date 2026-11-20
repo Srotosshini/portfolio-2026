@@ -72,14 +72,17 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `market-mug`, `market-steam`, `market-sled`, `market-robin`, `market-robin-hop` | design: the mug on a window sill and its steam (draw two or three tracings: it rises), the sled, the robin standing and mid-hop (same size of sheet for both) |
 | `market-note` | design: the "click a stall to go inside" note hanging from the lights |
 | `market-back`, `market-case` | design: the "← back to the market" sign inside every stall, and the case study note pinned up in it |
-| `doodle`, `doodle-idle` | About: your doodle, making a peace sign for the camera (it is also the you in every polaroid, so one drawing changes them all), and the same you waiting between photos |
+| `doodle`, `doodle-idle`, `doodle-wave` | About: your doodle in your room: making a peace sign for the camera, waiting between photos, waving (when someone clicks you). The polaroids draw their own you, posed and dressed for each city, until there are scene drawings of your own (below) |
+| `scene-dhaka`, `scene-abu-dhabi`, … (`scene-<slug>`) | About: a city's polaroid, square: you in that place. The cities, their captions and the stand-in scenes are in [src/data/places.js](src/data/places.js) |
 | `selfie-camera` | About: your camera on its tripod, lens pointing left (toward you). If its countdown light, flash or photo slot are not where the stand-in has them, change `LIGHT`, `FLASH` and `SLOT` at the top of [src/rooms/about.js](src/rooms/about.js) |
-| `corkboard`, `map`, `map-heart` | About: the corkboard on the wall, the map pinned to it (the stand-in is drawn to fit your places; a map of your own has to put them where the stand-in does), and the little heart that pops up on a place |
-| `backdrop-roller` | About: the wooden roller the painted backdrop hangs from (the backdrop itself is the place drawings below) |
-| `countdown-3`, `countdown-2`, `countdown-1`, `flash-burst` | About: the paper badges that pop up over the camera as it counts down, and the starburst when it flashes |
-| `memories-box`, `rug` | About: the shoebox the photos go into when the board is full, and the rug on the floor |
-| `pushpin` | About: a pushpin seen from the front (`pushpin-1`, `-2`, `-3` are used as three colours) |
-| `place-dhaka`, `place-abu-dhabi`, `place-shanghai`, `place-zhangjiajie` (`place-<name>`) | About: the places, square: each hangs as the painted backdrop behind you, and is the background of its polaroid. The list of places is `about.places` in [src/data/projects.js](src/data/projects.js) (a name, and where it is for the map); add one there and a drawing here |
+| `pinboard`, `pinboard-map`, `pinboard-tag`, `pushpin` | About: the cork board, the map behind the polaroids (a map of your own has to put the cities where the stand-in does), the "21 cities and counting" tag, a pushpin from the front (`pushpin-1`, `-2`, `-3` are used as three colours) |
+| `desk`, `desk-lamp`, `laptop`, `notebook`, `envelope`, `envelope-flap`, `letter`, `card-holder`, `business-card`, `cv-folder` | About: your desk (its front: drawers and a leg) and what is on it: the lamp, the laptop from behind with its "github" sticker, the open notebook (your bio), the envelope, its flap and the letter in it, the business card holder and a card, the folder labelled "cv" |
+| `window`, `wall-note` | About: the window, its frame, curtains and sill (cut the glass out: the city shows through), and the note taped to the wall |
+| `pennant-nyu-abu-dhabi`, `pennant-nyu-shanghai` | About: the felt pennants, pointing right, hand-lettered |
+| `violin-case`, `violin`, `violin-bow`, `music-note-1`, `music-note-2` | About: the open case, the violin and its bow (both lie in it), and the two paper music notes that drift and swirl out of it |
+| `suitcase`, `suitcase-lid`, `suitcase-slip` | About: the suitcase from the front, covered in stickers, its lid, and the slip inside that counts the countries |
+| `cat-loaf`, `cat-happy`, `cat-sleep`, `cat-belly`, `cat-stretch`, `cat-yawn`, `cat-sit`, `cat-walk1`, `cat-walk2`, `cat-swat`, `cat-tail` | About: your cat in all its moods, on sheets the size of the stand-ins (lying: 560 × 360, sitting: 380 × 480, walking: 600 × 400). In `loaf`, `swat` and `sit`, leave its eyes empty where the stand-in has them: the pupils are added in the room, to follow the pointer |
+| `rug`, `heart`, `zzz`, `string-toy`, `flash-burst`, `countdown-3`, `countdown-2`, `countdown-1` | About: the rug, the hearts and z's that float up, the toy the cat swats at, the camera's flash and its countdown badges |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
 
@@ -110,6 +113,9 @@ If your projector drawing puts the lens or the slide slot somewhere other than t
 | `public/process/<game>-1.jpg` … | process images |
 | `public/photos/*.jpg` | photography: every image here goes onto the film, in file-name order (`01.jpg`, `02.jpg`, …) |
 | `public/photos/thumbs/*.jpg` | optional smaller copies with the same names (about 600 px); the film uses these and only fetches the big one when it is projected |
+| `public/about/places/<slug>/*.jpg` | About: your photos from a city, in file-name order; "see my photos" on its polaroid opens them |
+| `public/about/piano.mp4`, `public/about/violin.mp4` | About: your performances, out of the violin case (muted unless the sound is on) |
+| `public/about/cat.jpg` | About: a photo of your cat, to draw it from (the site does not show it) |
 | `public/cv.pdf` | the CV |
 
 Game names in file names: `snikisnak`, `patchwork`, `duckie`, `park`, `jam`, `spatial-equity`.
@@ -147,7 +153,7 @@ Until a card's clip is there, a stand-in pattern plays in its picture. The cards
 
 The module's title and goal (for the blackboard) are under `module` in the data file. Until a file is there, a stand-in drawing takes its place.
 
-**Sound** is off until the visitor turns it on (the switch beside "hold still"). Every sound is made in the browser, so there are no sound files: the card shop's foil crinkle, tear, card flick, sparkle and binder snap; the market's sleigh bells, door creak, shop bell, footsteps in the snow and the wind.
+**Sound** is off until the visitor turns it on (the switch beside "hold still"). Every sound is made in the browser, so there are no sound files: the card shop's foil crinkle, tear, card flick, sparkle and binder snap; the market's sleigh bells, door creak, shop bell, footsteps in the snow and the wind; your room's camera shutter, the cat's purr, the violin and the rustle of paper.
 
 ## Writing
 
@@ -182,7 +188,13 @@ src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the
 src/lib/stepped.js    the 12 fps stop-motion clock
 src/lib/loop.js       the little scene each box plays over and over on the shelf
 src/lib/plushies.js   stand-in drawings for the claw machine and its plush toys; nothing here should survive
-src/lib/polaroids.js  stand-in drawings for the About room: camera, corkboard, desk, the places; nothing here should survive
+src/lib/polaroids.js  stand-in drawings for the About room: camera, pins, badges, the map; nothing here should survive
+src/lib/room-things.js  stand-ins for everything else in your room, the cat included; nothing here should survive
+src/lib/doodle.js     your doodle: poses, outfits, props (a stand-in for your own drawing)
+src/lib/scenes.js     the city scenes on your polaroids (stand-ins)
+src/lib/soft.js       the soft, puffy drawing style the plushies and your room are drawn in
+src/lib/about-ui.js   the paper panels in your room: photos, notebook, letter, card, report card, music
+src/data/places.js    the cities on your travel pinboard
 src/lib/camera.js     camera framing and moves
 src/lib/overlay.js    buttons over the scene, the paper card, clips behind the screens
 src/lib/pages.js      the project page template (shared by the cards and the list)

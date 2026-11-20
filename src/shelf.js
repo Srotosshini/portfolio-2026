@@ -16,7 +16,7 @@ const TILE = 6 // a scanned sheet covers this much before it repeats
 // tallest thing that can stand in it.
 const SIZES = {
   games: [7.2, 3.2, 2.6],
-  about: [3.3, 2.4, 1.7],
+  about: [4.0, 2.8, 2.0],
   photography: [5.0, 3.0, 2.2],
   'creative-coding': [4.6, 2.6, 1.9],
   design: [5.0, 2.1, 1.6],
@@ -58,7 +58,7 @@ const LAYOUTS = {
       [['photography', -1.1]],
       [['creative-coding', 1.2]],
       [['games', 0]],
-      [['about', -1.75]],
+      [['about', -1.6]],
       [['design', 0.9]],
       [['research', -1.4]],
     ],

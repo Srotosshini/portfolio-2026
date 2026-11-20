@@ -1,24 +1,29 @@
-// About: her room, in miniature, with a little photo studio in it.
-// A painted backdrop hangs on a roller behind her (a doodle of her, drawn in
-// marker); her camera stands on its tripod facing her; on the wall, a
-// corkboard with a hand-drawn map of the places she has been, fairy lights
-// strung over it. Over and over, on the shelf and inside: the backdrop rolls
-// up and down again on the next place, she strikes her pose, the camera
-// counts down 3, 2, 1 and flashes (she hops), and a polaroid slides out. It
-// floats to the front, big, and develops out of the white as it shakes: her,
-// in front of that place. Then it is pinned up on the board and a red thread
-// runs from it to the place on the map, where a heart pops up. When the board
-// is full, the pins come out and the photos slide into the memories box.
-// Clicking the box: one big flash, and the camera flies in; her About card
-// (bio, CV, contact) opens beside the room.
+// About: her room, a cosy diorama where everything does something.
+//   back wall, left:  the travel pinboard, a polaroid for every city she has
+//                     been to, a map behind them and a red string from Dhaka
+//   middle:           her camera on its tripod, taking her photo, over and over
+//   back wall, right: her school pennants, and the window (a city outside)
+//   right:            her desk: lamp, laptop (GitHub), notebook (her bio),
+//                     envelope (email), card holder (LinkedIn), folder (CV)
+//   front left:       her violin in its case; front right: a suitcase
+//   on the rug:       her cat
+// Click a polaroid and it comes off the board, big, with her photos from that
+// trip; the camera takes a photo when clicked; the violin plays and turns into
+// her two performances; the pennants pull down a report card; the lamp turns
+// the room from night to day; the window shows another city; the suitcase
+// counts the countries; the cat purrs when stroked and does what cats do.
 import * as THREE from 'three'
 import { about } from '../data/projects.js'
-import { makePiece, makeFlat, texture, canvas, boil, rng } from '../lib/paper.js'
-import * as sketch from '../lib/placeholders.js'
-import * as drawn from '../lib/polaroids.js'
-import { art, files, base } from '../lib/assets.js'
-import { renderAbout } from '../lib/pages.js'
+import { places, windowViews } from '../data/places.js'
+import { makePiece, makeFlat, texture, canvas, boil, rng, lightDot } from '../lib/paper.js'
+import { art, files, turn, loadImage } from '../lib/assets.js'
+import { sound } from '../lib/sound.js'
 import { loopClock, passed, smooth } from '../lib/loop.js'
+import * as drawn from '../lib/polaroids.js'
+import * as things from '../lib/room-things.js'
+import { scene, herFor, view } from '../lib/scenes.js'
+import { doodle } from '../lib/doodle.js'
+import { makeAboutUI } from '../lib/about-ui.js'
 
 // Where things are on the camera's drawing, as fractions of its width (from
 // the left) and height (from the bottom): the countdown light, the flash, and
@@ -27,312 +32,508 @@ const LIGHT = { x: 0.545, y: 0.91 }
 const FLASH = { x: 0.145, y: 0.91 }
 const SLOT = { x: 0.548, y: 0.968 }
 
-const PW = 0.3 // a polaroid on the board, in scene units
+const PW = 0.15 // a polaroid on the board
 const PH = PW * 1.2
-const BIG = 1.85 // how much bigger it is held up at the front while it develops
-const PINS = ['#e0483e', '#f2c544', '#4f86d9'] // pushpin colours (her own: pushpin-1.png, -2, -3)
+const NIGHT = 0.42 // how dark the room is at night, inside (the lamp and the window glow)
+const PINS = ['#e0483e', '#f2c544', '#4f86d9']
 const COUNT_COLOURS = ['#f2c75c', '#8fb1e3', '#e2a0a6']
+// the camera's loop, in seconds
+const LOOP = 9
+const COUNT = [0.5, 1.05, 1.6] // 3, 2, 1 (and the red light)
+const SNAP = 2.15 // the flash
+const OUT = [2.35, 2.85] // the polaroid slides out of the top,
+const RISE = [2.85, 3.4] // floats up to the front, growing,
+const DEVELOP = [3.4, 5.4] // develops as it is shaken,
+const FLY = [5.4, 6.1] // and flies to its city's place on the board
+const PIN = 6.1
 
-// The loop, in seconds. Each photo's times are counted from the start of the
-// loop, or from when the board has cleared, if it was full.
-const LOOP = 9.6
-const CLEAR = 1.3 // the pins come out and the photos slide into the memories box
-const ROLL = [0, 0.42, 0.52, 1.0] // the backdrop rolls up, changes, and rolls down again
-const COUNT = [1.05, 1.6, 2.15] // 3, 2, 1 (each up for 0.45 s; the red light blinks with it)
-const SNAP = 2.7 // the flash
-const OUT = [2.9, 3.4] // the polaroid slides out of the top of the camera,
-const RISE = [3.4, 3.95] // floats up to the front, growing,
-const DEVELOP = [3.95, 6.0] // shakes and develops,
-const FLY = [6.0, 6.7] // flies to the board,
-const PIN = 6.7 // is pinned up,
-const THREAD = [6.9, 7.4] // a red thread runs to its place on the map,
-const HEART = 7.4 // and a heart pops up there
-
-export async function build({ box, stepped, onShelf }) {
+export async function build({ box, stepped, overlay, redraw, lights, camera: lens, onShelf }) {
   const { inner } = box
   const room = new THREE.Group()
   room.position.y = inner.floor
   box.body.add(room)
   const rand = rng(14)
   const lerp = THREE.MathUtils.lerp
-  const places = (about.places || [])
-    .map((p) => (typeof p === 'string' ? { name: p } : p))
-    .filter((p) => p && p.name)
-    .map((p) => ({ ...p, name: String(p.name).trim() }))
-  const count = places.length
-  const capacity = Math.min(6, Math.max(3, count))
+  const V = (x, y, z) => new THREE.Vector3(x, y, z)
+  const back = inner.back
+  const ui = makeAboutUI({ reduced: () => stepped.reduced })
+  const countries = [...new Set(places.map((p) => p.country))]
+  const photosOf = (p) => files.filter((f) => f.startsWith(`about/places/${p.slug}/`) && /\.(jpe?g|png|webp|avif)$/i.test(f)).sort()
 
-  // her drawings where they exist, labelled stand-ins where they do not
-  const area = drawn.mapArea(places)
-  const [peaceArt, idleArt, cameraArt, corkArt, pinArt, rollerArt, mapArt, heartArt, boxArt, rugArt, burstArt, ...badgeArts] = await Promise.all([
-    art('drawings/doodle', (seed) => sketch.doodle(seed, 'peace')),
-    art('drawings/doodle-idle', (seed) => sketch.doodle(seed, 'idle')),
-    art('drawings/selfie-camera', (seed) => drawn.selfieCamera(seed)),
-    art('drawings/corkboard', (seed) => drawn.corkboard(seed), { tracings: 1 }),
+  // ---- her drawings where they exist, stand-ins where they do not ---------------------------------
+  const one = { tracings: 1 }
+  const flat = { edge: 0, trim: false, tracings: 1 }
+  const [
+    peaceArt, idleArt, waveArt, cameraArt, boardArt, pinArt, mapArt, tagArt, deskArt, lampArt, laptopArt, noteArt, envelopeArt, flapArt, letterArt,
+    holderArt, cardArt, folderArt, windowArt, noteWallArt, caseArt, violinArt, bowArt, noteA, noteB, suitcaseArt, lidArt, slipArt, rugArt,
+    heartArt, zeeArt, toyArt, burstArt, ...badgeArts
+  ] = await Promise.all([
+    art('drawings/doodle', (s) => doodle(s, { pose: 'peace' })),
+    art('drawings/doodle-idle', (s) => doodle(s, { pose: 'stand' })),
+    art('drawings/doodle-wave', (s) => doodle(s, { pose: 'wave' })),
+    art('drawings/selfie-camera', (s) => drawn.selfieCamera(s)),
+    art('drawings/pinboard', (s) => things.pinboard(s), one),
     art('drawings/pushpin', (n) => drawn.pushpin(PINS[(n - 1) % PINS.length]), { edge: 2, tracings: PINS.length }),
-    art('drawings/backdrop-roller', (seed) => drawn.roller(seed), { tracings: 1 }),
-    art('drawings/map', (seed) => drawn.worldMap(area, seed).canvas, { edge: 0, trim: false, tracings: 1 }),
-    art('drawings/map-heart', (seed) => drawn.heart(seed), { edge: 3, tracings: 1 }),
-    art('drawings/memories-box', (seed) => drawn.memoryBox(seed)),
-    art('drawings/rug', (seed) => drawn.rug(seed), { edge: 0, tracings: 1 }),
-    art('drawings/flash-burst', (seed) => drawn.starburst(seed), { edge: 3, tracings: 1 }),
-    ...['3', '2', '1'].map((n, i) => art(`drawings/countdown-${n}`, (seed) => drawn.badge(n, COUNT_COLOURS[i], seed), { tracings: 1 })),
+    art('drawings/pinboard-map', (s) => drawn.worldMap(MAP_AREA, s).canvas, flat),
+    art('drawings/pinboard-tag', (s) => things.tag(`${places.length} cities and counting`, s), one),
+    art('drawings/desk', (s) => things.deskFront(s), one),
+    art('drawings/desk-lamp', (s) => things.lamp(s), one),
+    art('drawings/laptop', (s) => things.laptop(s), one),
+    art('drawings/notebook', (s) => things.notebook(about.bio.join(' '), s), { edge: 3, tracings: 1 }),
+    art('drawings/envelope', (s) => things.envelope(s), one),
+    art('drawings/envelope-flap', (s) => things.envelopeFlap(s), { edge: 2, tracings: 1 }),
+    art('drawings/letter', (s) => things.letter(s), { edge: 2, tracings: 1 }),
+    art('drawings/card-holder', (s) => things.cardHolder(s), one),
+    art('drawings/business-card', (s) => things.businessCard(s), { edge: 2, tracings: 1 }),
+    art('drawings/cv-folder', (s) => things.folder(s), one),
+    art('drawings/window', (s) => things.windowFrame(s), { edge: 3, tracings: 1, trim: false }),
+    art('drawings/wall-note', (s) => things.note(about.hello, s), one),
+    art('drawings/violin-case', (s) => things.violinCase(s), one),
+    art('drawings/violin', (s) => things.violin(s), one),
+    art('drawings/violin-bow', (s) => things.bow(s), one),
+    art('drawings/music-note-1', (s) => things.musicNote(0, s), { edge: 2, tracings: 1 }),
+    art('drawings/music-note-2', (s) => things.musicNote(1, s), { edge: 2, tracings: 1 }),
+    art('drawings/suitcase', (s) => things.suitcase(countries, s), one),
+    art('drawings/suitcase-lid', (s) => things.suitcaseLid(s), one),
+    art('drawings/suitcase-slip', (s) => things.suitcaseSlip(`${countries.length} countries · ${places.length} cities`, s), { edge: 2, tracings: 1 }),
+    art('drawings/rug', (s) => drawn.rug(s), flat),
+    art('drawings/heart', (s) => drawn.heart(s), { edge: 2, tracings: 1 }),
+    art('drawings/zzz', (s) => things.zee(s), { edge: 2, tracings: 1 }),
+    art('drawings/string-toy', (s) => things.stringToy(s), { edge: 2, tracings: 1 }),
+    art('drawings/flash-burst', (s) => drawn.starburst(s), { edge: 3, tracings: 1 }),
+    ...['3', '2', '1'].map((n, i) => art(`drawings/countdown-${n}`, (s) => drawn.badge(n, COUNT_COLOURS[i], s), one)),
   ])
-  const mapSpot = drawn.mapSpot(area) // (where each place falls on the map, as fractions of the sheet)
+  const pennantArts = []
+  for (const school of about.education) {
+    const slug = school.short.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    pennantArts.push(await art(`drawings/pennant-${slug}`, (s) => things.pennant(school.short, school.colours[0], school.colours[1], s), one))
+  }
+  const catArts = {}
+  for (const pose of Object.keys(things.CAT)) catArts[pose] = await art(`drawings/cat-${pose}`, () => things.CAT[pose](), { edge: 4, trim: false, tracings: 1 })
 
-  // ---- the room: a rug, the backdrop on its roller, her, her camera ----------------------------
-  const rug = makeFlat(rugArt, { width: 1.5 })
+  // ---- the room: rug, her, her camera ------------------------------------------------------------------
+  const rug = makeFlat(rugArt, { width: 1.6 })
   rug.mesh.rotation.x = -Math.PI / 2
-  rug.mesh.position.set(-0.55, 0.004, -0.72)
+  rug.mesh.position.set(-0.05, 0.004, -0.62)
   rug.mesh.castShadow = false
   room.add(rug.mesh)
 
-  const BACKDROP = { x: -0.74, top: 2.04, w: 1.42, z: -1.32 }
-  const roller = makeFlat(rollerArt, { width: BACKDROP.w + 0.16 })
-  roller.mesh.position.set(BACKDROP.x, BACKDROP.top + 0.03, BACKDROP.z + 0.02)
-  room.add(roller.mesh)
-  const bottomRod = makeFlat(rollerArt, { width: BACKDROP.w + 0.06 })
-  bottomRod.mesh.scale.y = 0.7
-  room.add(bottomRod.mesh)
-  const scenery = new THREE.Mesh(new THREE.PlaneGeometry(BACKDROP.w, BACKDROP.w).translate(0, -BACKDROP.w / 2, 0), new THREE.MeshLambertMaterial())
-  scenery.position.set(BACKDROP.x, BACKDROP.top, BACKDROP.z)
-  scenery.castShadow = scenery.receiveShadow = true
-  room.add(scenery)
-
-  const her = { idle: makePiece(idleArt, { height: 1.28 }), peace: makePiece(peaceArt, { height: 1.28 }) }
+  const HER = V(-0.46, 0, -1.04)
+  const her = { idle: makePiece(idleArt, { height: 1.12 }), peace: makePiece(peaceArt, { height: 1.12 }), wave: makePiece(waveArt, { height: 1.12 }) }
   for (const piece of Object.values(her)) {
-    piece.group.position.set(BACKDROP.x, 0, -0.88)
-    piece.group.rotation.y = 0.1
+    piece.group.position.copy(HER)
+    piece.group.rotation.y = 0.18
     room.add(piece.group)
   }
   let pose = null
   function strike(name) {
     if (pose === name) return false
     pose = name
-    her.idle.group.visible = name === 'idle'
-    her.peace.group.visible = name === 'peace'
+    for (const [k, piece] of Object.entries(her)) piece.group.visible = k === name
     return true
   }
   strike('idle')
 
-  const camera = makePiece(cameraArt, { height: 1.08 })
-  camera.group.position.set(0.5, 0, -0.32)
-  camera.group.rotation.y = -0.2 // turned toward her
+  const camera = makePiece(cameraArt, { height: 0.98 })
+  camera.group.position.set(0.1, 0, -0.46)
+  camera.group.rotation.y = -0.28 // turned toward her
   room.add(camera.group)
-  const onCamera = (f, z = 0) => new THREE.Vector3((f.x - 0.5) * camera.width, f.y * camera.height, z)
+  const onCamera = (f, z = 0) => V((f.x - 0.5) * camera.width, f.y * camera.height, z)
 
-  // ---- the wall: corkboard, map, fairy lights; the memories box below ----------------------------
-  const board = makeFlat(corkArt, { width: 1.34 })
-  const BOARD = { x: inner.w / 2 - 0.74, y: 1.47, z: inner.back + 0.012 }
+  // ---- the travel pinboard -----------------------------------------------------------------------------
+  const board = makeFlat(boardArt, { width: 1.7 })
+  const BOARD = { x: -0.97, y: 1.74, z: back + 0.012 }
   board.mesh.position.set(BOARD.x, BOARD.y, BOARD.z)
   board.mesh.castShadow = false
   room.add(board.mesh)
-  const map = makeFlat(mapArt, { width: 0.66 })
-  map.mesh.position.set(BOARD.x, BOARD.y - 0.01, BOARD.z + 0.005)
-  map.mesh.rotation.z = 0.02
+  const map = makeFlat(mapArt, { width: 1.46 })
+  map.mesh.position.set(BOARD.x, BOARD.y - 0.01, BOARD.z + 0.004)
+  map.mesh.rotation.z = 0.012
   map.mesh.castShadow = false
   room.add(map.mesh)
-  for (const sx of [-1, 1]) {
-    const pin = makeFlat([pinArt[sx > 0 ? 1 : 2]], { width: 0.045 })
-    pin.mesh.position.set(BOARD.x + sx * (map.width / 2 - 0.03), BOARD.y + map.height / 2 - 0.04, BOARD.z + 0.012)
-    room.add(pin.mesh)
-  }
-  const placeAt = places.map((p) => {
-    if (!Number.isFinite(p.lon) || !Number.isFinite(p.lat)) return null
-    const [fx, fy] = mapSpot(p)
-    return new THREE.Vector3(BOARD.x + (fx - 0.5) * map.width, BOARD.y - 0.01 + (0.5 - fy) * map.height, BOARD.z + 0.014)
+  const countTag = makeFlat(tagArt, { width: 0.4 })
+  countTag.mesh.position.set(BOARD.x + board.width / 2 - 0.3, BOARD.y - board.height / 2 + 0.07, BOARD.z + 0.02)
+  countTag.mesh.rotation.z = 0.04
+  countTag.mesh.castShadow = false
+  room.add(countTag.mesh)
+  const spotOnMap = drawn.mapSpot(MAP_AREA)
+  // each polaroid starts where its city is on the map, then they shuffle apart so they overlap a little at most
+  const anchors = places.map((p) => {
+    const [fx, fy] = spotOnMap(p)
+    return V(BOARD.x + (fx - 0.5) * map.width, BOARD.y - 0.01 + (0.5 - fy) * map.height, 0)
   })
-  const hearts = placeAt.map((at) => {
-    if (!at) return null
-    const h = makeFlat(heartArt, { width: 0.06 })
-    h.mesh.position.copy(at)
-    h.mesh.position.z += 0.004
-    h.mesh.visible = false
-    h.mesh.castShadow = false
-    room.add(h.mesh)
-    return h.mesh
-  })
-  // the photos go up round the map, each a little crooked
-  const around = [
-    [-0.47, 0.25],
-    [0.47, 0.25],
-    [-0.47, -0.25],
-    [0.47, -0.25],
-    [0, 0.36],
-    [0, -0.36],
-  ]
-  const spots = Array.from({ length: capacity }, (_, k) => ({
-    x: BOARD.x + around[k][0] + (rand() - 0.5) * 0.03,
-    y: BOARD.y + around[k][1] + (rand() - 0.5) * 0.03,
-    z: BOARD.z + 0.02 + k * 0.002,
-    tilt: (rand() - 0.5) * 0.3,
-  }))
-
-  // fairy lights along the top of the board
-  const bulbAt = []
-  {
-    const a = new THREE.Vector3(BOARD.x - board.width / 2 - 0.04, BOARD.y + board.height / 2 + 0.03, BOARD.z + 0.03)
-    const b = new THREE.Vector3(BOARD.x + board.width / 2 + 0.04, BOARD.y + board.height / 2 + 0.03, BOARD.z + 0.03)
-    const points = []
-    for (let i = 0; i <= 40; i++) {
-      const t = i / 40
-      points.push(new THREE.Vector3().lerpVectors(a, b, t).setY(lerp(a.y, b.y, t) - Math.sin(Math.PI * t) * 0.17 - Math.sin(Math.PI * t * 2) ** 2 * 0.03))
+  const slots = anchors.map((a) => a.clone())
+  const xLim = board.width / 2 - PW / 2 - 0.06
+  const yLim = board.height / 2 - PH / 2 - 0.06
+  for (let it = 0; it < 400; it++) {
+    for (let i = 0; i < slots.length; i++) {
+      for (let j = i + 1; j < slots.length; j++) {
+        const dx = slots[j].x - slots[i].x
+        const dy = slots[j].y - slots[i].y
+        const ox = PW * 0.98 - Math.abs(dx)
+        const oy = PH * 0.95 - Math.abs(dy)
+        if (ox > 0 && oy > 0) {
+          if (ox < oy) {
+            const s = (dx >= 0 ? 1 : -1) * ox * 0.5
+            slots[i].x -= s
+            slots[j].x += s
+          } else {
+            const s = (dy >= 0 ? 1 : -1) * oy * 0.5
+            slots[i].y -= s
+            slots[j].y += s
+          }
+        }
+      }
+      slots[i].x += (anchors[i].x - slots[i].x) * 0.01
+      slots[i].y += (anchors[i].y - slots[i].y) * 0.01
+      slots[i].x = THREE.MathUtils.clamp(slots[i].x, BOARD.x - xLim, BOARD.x + xLim)
+      slots[i].y = THREE.MathUtils.clamp(slots[i].y, BOARD.y - yLim, BOARD.y + yLim)
     }
-    const wire = []
-    for (let i = 0; i < points.length - 1; i++) {
-      const p = points[i]
-      const q = points[i + 1]
-      wire.push(p.x, p.y + 0.004, p.z, p.x, p.y - 0.004, p.z, q.x, q.y + 0.004, q.z, p.x, p.y - 0.004, p.z, q.x, q.y - 0.004, q.z, q.x, q.y + 0.004, q.z)
-    }
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(wire, 3))
-    room.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: '#3a3328', side: THREE.DoubleSide })))
-    for (let i = 2; i < points.length - 1; i += 3) bulbAt.push(points[i].clone().add(new THREE.Vector3(0, -0.03, 0.004)))
   }
-  const bulbs = new THREE.InstancedMesh(
-    new THREE.PlaneGeometry(0.045, 0.065),
-    new THREE.MeshBasicMaterial({ map: texture(sketch.paperBulb()), alphaTest: 0.5, side: THREE.DoubleSide }),
-    bulbAt.length,
-  )
-  const m4 = new THREE.Matrix4()
-  bulbAt.forEach((p, k) => bulbs.setMatrixAt(k, m4.makeTranslation(p.x, p.y, p.z)))
-  bulbs.frustumCulled = false
-  room.add(bulbs)
-  const BULBS = [new THREE.Color('#ffd36b'), new THREE.Color('#ffe9a8'), new THREE.Color('#ffc0a0')]
-  const DIM = new THREE.Color('#a8844a')
-  const twinkle = bulbAt.map(() => 0)
-  function paintBulbs() {
-    bulbAt.forEach((_, k) => bulbs.setColorAt(k, twinkle[k] > 0 ? DIM : BULBS[k % 3]))
-    bulbs.instanceColor.needsUpdate = true
-  }
-  paintBulbs()
-
-  const memories = makePiece(boxArt, { width: 0.56 })
-  memories.group.position.set(BOARD.x + 0.36, 0, inner.back + 0.36)
-  memories.group.rotation.y = -0.08
-  room.add(memories.group)
-  const memoriesTop = memories.height * 0.78
-
-  // ---- the backdrop: one painted place after another ----------------------------------------
-  const scenes = []
-  for (let i = 0; i < count; i++) {
-    const slug = places[i].name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const [prep] = await art(`drawings/place-${slug}`, () => drawn.place(places[i].name, i + 1), { edge: 0, trim: false, tracings: 1 })
-    scenes.push(prep.front)
-  }
-  const sceneMaps = scenes.map((s) => texture(s))
-  let showingScene = -1
-  let rolled = -1
-  function hangScene(i) {
-    if (i === showingScene || !sceneMaps[i]) return
-    showingScene = i
-    scenery.material.map = sceneMaps[i]
-    scenery.material.needsUpdate = true
-    rolled = -1
-  }
-  // 0: rolled right up into the roller; 1: all the way down
-  function unroll(k) {
-    if (k === rolled) return false
-    rolled = k
-    const s = Math.max(0.04, k)
-    scenery.scale.y = s
-    const map = scenery.material.map
-    if (map) {
-      map.repeat.y = s
-      map.offset.y = 1 - s
-    }
-    bottomRod.mesh.position.set(BACKDROP.x, BACKDROP.top - BACKDROP.w * s - 0.005, BACKDROP.z + 0.03)
-    return true
+  // the city's own dot on the map
+  const dotLook = new THREE.MeshBasicMaterial({ color: '#d8333f' })
+  const dotShape = new THREE.CircleGeometry(0.011, 10)
+  for (const a of anchors) {
+    const dot = new THREE.Mesh(dotShape, dotLook)
+    dot.position.set(a.x, a.y, BOARD.z + 0.008)
+    room.add(dot)
   }
 
-  // ---- her photos: her (in her peace-sign pose), in front of each place ------------------------
-  const photos = scenes.map((scene, i) => {
-    const photo = canvas(440, 440)
-    drawn.selfie(photo, scene, peaceArt[0].front, i)
-    return photo
-  })
-
-  // ---- polaroids: one for each spot on the board, and one more in the camera ------------------
-  const back = new THREE.MeshLambertMaterial({ color: '#34343c', side: THREE.BackSide })
+  // the polaroids themselves: her, in each city
+  const herCache = new Map()
+  const herIn = (p) => {
+    const s = p.scene || {}
+    const key = [s.pose, s.outfit, s.prop, s.makeup].join('|')
+    if (!herCache.has(key)) herCache.set(key, herFor(p))
+    return herCache.get(key)
+  }
   const sheet = new THREE.PlaneGeometry(PW, PH)
-  const threadShape = new THREE.PlaneGeometry(0.008, 1).translate(0, 0.5, 0)
-  const threadLook = new THREE.MeshBasicMaterial({ color: '#b82e36' })
-  const polaroids = Array.from({ length: capacity + 1 }, (_, k) => {
-    const face = canvas(360, 432)
-    const map = texture(face)
-    const front = new THREE.Mesh(sheet, new THREE.MeshLambertMaterial({ map }))
-    const rear = new THREE.Mesh(sheet, back)
+  const backLook = new THREE.MeshLambertMaterial({ color: '#34343c', side: THREE.BackSide })
+  // her own drawing of a scene (drawings/scene-<slug>.png), or the stand-in: the place, and her in it
+  const ownScene = async (p) => {
+    const file = files.find((f) => f.startsWith(`drawings/scene-${p.slug}.`) && /\.(png|jpe?g|webp)$/i.test(f))
+    return file ? loadImage(file).catch(() => null) : null
+  }
+  function paintScene(target, pol) {
+    if (!pol.own) return scene(target, pol.p.scene?.place, herIn(pol.p), pol.i + 1)
+    const ctx = target.getContext('2d')
+    const s = Math.min(pol.own.width, pol.own.height)
+    ctx.drawImage(pol.own, (pol.own.width - s) / 2, (pol.own.height - s) / 2, s, s, 0, 0, target.width, target.height)
+  }
+  const polaroids = []
+  for (let i = 0; i < places.length; i++) {
+    await turn()
+    const p = places[i]
+    const own = await ownScene(p)
+    const photo = canvas(220, 220)
+    paintScene(photo, { p, i, own })
+    const face = canvas(256, 307)
+    things.cityPolaroid(face, photo, p.city, null, 1)
+    const small = texture(face)
+    const front = new THREE.Mesh(sheet, new THREE.MeshLambertMaterial({ map: small }))
+    const rear = new THREE.Mesh(sheet, backLook)
     front.castShadow = front.receiveShadow = true
     const group = new THREE.Group()
     group.add(front, rear)
-    group.visible = false
+    const s = slots[i]
+    const tilt = (rand() - 0.5) * 0.32
+    group.position.set(s.x, s.y, BOARD.z + 0.02 + i * 0.0012)
+    group.rotation.z = tilt
     room.add(group)
-    const pin = makeFlat([pinArt[k % pinArt.length]], { width: 0.05 })
-    pin.mesh.visible = false
+    const pin = makeFlat([pinArt[i % pinArt.length]], { width: 0.035 })
+    const pinAt = V(s.x - Math.sin(tilt) * (PH / 2 - 0.02), s.y + Math.cos(tilt) * (PH / 2 - 0.02), BOARD.z + 0.035 + i * 0.0012)
+    pin.mesh.position.copy(pinAt)
     room.add(pin.mesh)
-    const thread = new THREE.Mesh(threadShape, threadLook)
-    thread.visible = false
-    room.add(thread)
-    return { group, face, map, pin: pin.mesh, thread, place: -1, spot: -1, k: -1, pinAt: new THREE.Vector3() }
-  })
-  function develop(p, k) {
-    if (p.k === k) return false
-    p.k = k
-    drawn.polaroidFace(p.face, photos[p.place], places[p.place].name, k)
-    p.map.needsUpdate = true
-    return true
+    polaroids.push({ p, i, own, group, front, small, photo, pin: pin.mesh, pinAt, home: group.position.clone(), tilt, lifted: false, run: 0, spot: null })
   }
-  // up on the board, pinned
-  function pinUp(p, spot, scale = 1, pinScale = 1) {
-    const s = spots[spot]
-    p.spot = spot
-    p.group.visible = true
-    p.group.position.set(s.x, s.y, s.z)
-    p.group.rotation.set(0, 0, s.tilt)
-    p.group.scale.setScalar(scale)
-    p.pinAt.set(s.x - Math.sin(s.tilt) * (PH / 2 - 0.035), s.y + Math.cos(s.tilt) * (PH / 2 - 0.035), s.z + 0.014)
-    p.pin.visible = pinScale > 0.01
-    p.pin.position.copy(p.pinAt)
-    p.pin.scale.setScalar(pinScale)
-  }
-  // the red thread from its pin to its place on the map, drawn out as far as k
-  function stretch(p, k) {
-    const to = placeAt[p.place]
-    if (!to || k <= 0.01) {
-      p.thread.visible = false
-      return
+  // the red string, from pin to pin, starting at home
+  {
+    const quads = []
+    for (let k = 0; k < polaroids.length - 1; k++) {
+      const a = polaroids[k].pinAt
+      const b = polaroids[k + 1].pinAt
+      for (let s = 0; s < 6; s++) {
+        const t0 = s / 6
+        const t1 = (s + 1) / 6
+        const at = (t) => V(lerp(a.x, b.x, t), lerp(a.y, b.y, t) - Math.sin(Math.PI * t) * 0.02, BOARD.z + 0.03)
+        const p0 = at(t0)
+        const p1 = at(t1)
+        const dx = p1.x - p0.x
+        const dy = p1.y - p0.y
+        const l = Math.hypot(dx, dy) || 1
+        const nx = (-dy / l) * 0.0032
+        const ny = (dx / l) * 0.0032
+        quads.push(p0.x + nx, p0.y + ny, p0.z, p0.x - nx, p0.y - ny, p0.z, p1.x + nx, p1.y + ny, p1.z, p0.x - nx, p0.y - ny, p0.z, p1.x - nx, p1.y - ny, p1.z, p1.x + nx, p1.y + ny, p1.z)
+      }
     }
-    const dx = to.x - p.pinAt.x
-    const dy = to.y - p.pinAt.y
-    p.thread.visible = true
-    p.thread.position.set(p.pinAt.x, p.pinAt.y, BOARD.z + 0.012)
-    p.thread.rotation.z = Math.atan2(dy, dx) - Math.PI / 2
-    p.thread.scale.y = Math.hypot(dx, dy) * k
-  }
-  function popHeart(p, scale) {
-    const h = hearts[p.place]
-    if (!h) return
-    h.visible = scale > 0.01
-    h.scale.setScalar(Math.max(0.01, scale))
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(quads, 3))
+    room.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#c8333a', side: THREE.DoubleSide })))
   }
 
-  // ---- the countdown, the flash ----------------------------------------------------------------
+  // ---- the back wall, right: pennants, the window; the note ---------------------------------------------
+  const PEN_W = 0.56
+  const pennants = about.education.map((school, k) => {
+    const map = texture(pennantArts[k][0].front)
+    const geometry = new THREE.PlaneGeometry(PEN_W, PEN_W / pennantArts[k][0].aspect, 10, 1)
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ map, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
+    mesh.castShadow = true
+    mesh.position.set(0.66 + k * 0.62, 2.36 - k * 0.02, back + 0.03)
+    mesh.rotation.z = -0.1 + k * 0.04
+    room.add(mesh)
+    const rest = Float32Array.from(geometry.attributes.position.array)
+    return { school, mesh, geometry, rest, flutter: 0 }
+  })
+  const WIN = { x: 1.0, y: 1.52, w: 1.04 }
+  const frame = makeFlat(windowArt, { width: WIN.w })
+  frame.mesh.position.set(WIN.x, WIN.y, back + 0.03)
+  frame.mesh.castShadow = false
+  room.add(frame.mesh)
+  const viewCanvas = canvas(512, 512)
+  const viewMap = texture(viewCanvas)
+  viewMap.repeat.set(1, 0.84)
+  viewMap.offset.set(0, 0.08)
+  const viewPlane = new THREE.Mesh(new THREE.PlaneGeometry(WIN.w * 0.74, frame.height * 0.74), new THREE.MeshBasicMaterial({ map: viewMap }))
+  viewPlane.position.set(WIN.x, WIN.y + frame.height * 0.036, back + 0.012)
+  room.add(viewPlane)
+  let viewing = 0
+  let night = true
+  function paintView() {
+    const city = places.find((p) => p.slug === windowViews[viewing % windowViews.length]) || places[0]
+    view(viewCanvas, city.scene?.place, night, 3)
+    viewMap.needsUpdate = true
+    redraw()
+  }
+  paintView()
+  const wallNote = makeFlat(noteWallArt, { width: 0.36 })
+  wallNote.mesh.position.set(0.16, 1.98, back + 0.018)
+  wallNote.mesh.rotation.z = -0.05
+  wallNote.mesh.castShadow = false
+  room.add(wallNote.mesh)
+
+  // ---- her desk and what is on it ------------------------------------------------------------------------
+  const DESK = { x: 1.1, top: 0.74, z: -1.66, w: 1.44, d: 0.52 }
+  const topMap = texture(things.deskTop())
+  const wood = new THREE.MeshLambertMaterial({ color: '#b98258' })
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(DESK.w, 0.05, DESK.d), [wood, wood, new THREE.MeshLambertMaterial({ map: topMap }), wood, wood, wood])
+  deskTop.position.set(DESK.x, DESK.top - 0.025, DESK.z)
+  deskTop.castShadow = deskTop.receiveShadow = true
+  room.add(deskTop)
+  const deskFront = makeFlat(deskArt, { width: DESK.w })
+  deskFront.mesh.position.set(DESK.x, deskFront.height / 2, DESK.z + DESK.d / 2 + 0.005)
+  room.add(deskFront.mesh)
+  const onDesk = (preps, size, x, z, o = {}) => {
+    const piece = makePiece(preps, { ...size, tab: false, shadow: o.shadow ?? true })
+    piece.group.position.set(x, DESK.top, z)
+    if (o.turn) piece.group.rotation.y = o.turn
+    room.add(piece.group)
+    return piece
+  }
+  const lampPiece = onDesk(lampArt, { height: 0.5 }, 0.52, DESK.z - 0.06)
+  const laptop = onDesk(laptopArt, { width: 0.38 }, 0.87, DESK.z, { turn: 0.08 })
+  const holder = onDesk(holderArt, { width: 0.15 }, 1.66, DESK.z - 0.02)
+  const folder = onDesk(folderArt, { height: 0.24 }, 1.8, DESK.z - 0.08)
+  folder.hinge.rotation.z = -0.12
+  // the notebook and the envelope lie on the desk, tipped up toward you
+  const notebook = makeFlat(noteArt, { width: 0.44 })
+  notebook.mesh.position.set(1.2, DESK.top + 0.07, DESK.z + 0.1)
+  notebook.mesh.rotation.x = -1.1
+  room.add(notebook.mesh)
+  const envelope = new THREE.Group()
+  envelope.position.set(1.46, DESK.top + 0.05, DESK.z + 0.12)
+  envelope.rotation.x = -0.95
+  room.add(envelope)
+  const envBody = makeFlat(envelopeArt, { width: 0.2 })
+  envelope.add(envBody.mesh)
+  const letter = makeFlat(letterArt, { width: 0.17 })
+  letter.mesh.position.set(0, 0, -0.004)
+  envelope.add(letter.mesh)
+  const flapHinge = new THREE.Group()
+  flapHinge.position.set(0, envBody.height / 2 - 0.01, 0.003)
+  envelope.add(flapHinge)
+  const flap = makeFlat(flapArt, { width: 0.2 })
+  flap.mesh.position.y = -flap.height / 2
+  flapHinge.add(flap.mesh)
+  const bizCard = makeFlat(cardArt, { width: 0.13 })
+  bizCard.mesh.visible = false
+  room.add(bizCard.mesh)
+  // the lamp's light: a glow at the shade and a pool on the desk (light, not paper: it shows at night)
+  const dot = texture(lightDot())
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: '#ffd58a', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }))
+  glow.position.set(0.52 + 0.1, DESK.top + 0.36, DESK.z - 0.02)
+  glow.scale.setScalar(0.5)
+  room.add(glow)
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5), new THREE.MeshBasicMaterial({ map: dot, color: '#ffcf7a', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.32 }))
+  pool.rotation.x = -Math.PI / 2
+  pool.position.set(0.72, DESK.top + 0.002, DESK.z + 0.04)
+  room.add(pool)
+  function lampOn(on) {
+    glow.visible = pool.visible = on
+  }
+
+  // ---- the violin, in its open case, leaning in the front corner ------------------------------------------
+  const violinCase = makePiece(caseArt, { height: 0.92 })
+  violinCase.group.position.set(-1.62, 0, -0.52)
+  violinCase.group.rotation.y = 0.62
+  violinCase.setFold(-0.16)
+  room.add(violinCase.group)
+  const violin = makeFlat(violinArt, { height: 0.7 })
+  const violinHome = { position: V(0, 0.47, 0.02), rotation: new THREE.Euler(0, 0, 0) }
+  violin.mesh.position.copy(violinHome.position)
+  violinCase.hinge.add(violin.mesh)
+  const bowFlat = makeFlat(bowArt, { height: 0.68 })
+  const bowHome = { position: V(0.13, 0.46, 0.015), rotation: new THREE.Euler(0, 0, 0.07) }
+  bowFlat.mesh.position.copy(bowHome.position)
+  bowFlat.mesh.rotation.copy(bowHome.rotation)
+  violinCase.hinge.add(bowFlat.mesh)
+
+  // ---- the suitcase by the door ------------------------------------------------------------------------------
+  const suitcase = makePiece(suitcaseArt, { width: 0.6 })
+  suitcase.group.position.set(1.52, 0, -0.44)
+  suitcase.group.rotation.y = -0.18
+  room.add(suitcase.group)
+  const slip = makeFlat(slipArt, { width: 0.4 })
+  slip.mesh.position.set(0, suitcase.height - 0.08, -0.04)
+  slip.mesh.visible = false
+  suitcase.hinge.add(slip.mesh)
+  const lidHinge = new THREE.Group()
+  lidHinge.position.set(0, suitcase.height - 0.01, -0.01)
+  suitcase.hinge.add(lidHinge)
+  const lid = makeFlat(lidArt, { width: 0.6 })
+  lid.mesh.position.y = lid.height / 2 - 0.02
+  lidHinge.add(lid.mesh)
+  let lidOpen = false
+
+  // ---- her cat --------------------------------------------------------------------------------------------
+  // one paper cut out, its drawing swapped for each mood; pupils that follow the pointer; eyelids to blink
+  const catPose = {}
+  for (const [k, preps] of Object.entries(catArts)) catPose[k] = { map: texture(preps[0].front), aspect: preps[0].aspect }
+  const CAT_H = { loaf: 0.37, happy: 0.37, sleep: 0.35, belly: 0.37, stretch: 0.37, yawn: 0.37, sit: 0.5, walk1: 0.37, walk2: 0.37, swat: 0.37 }
+  const CAT_HOME = V(-0.02, 0, -0.32)
+  const cat = new THREE.Group()
+  cat.position.copy(CAT_HOME)
+  room.add(cat)
+  const catBody = new THREE.Group() // breathes
+  cat.add(catBody)
+  const catSheet = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0)
+  const catMesh = new THREE.Mesh(catSheet, new THREE.MeshLambertMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
+  catMesh.castShadow = true
+  catBody.add(catMesh)
+  const catShade = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.22), new THREE.MeshBasicMaterial({ map: dot, color: '#000000', transparent: true, opacity: 0.22, depthWrite: false }))
+  catShade.rotation.x = -Math.PI / 2
+  catShade.position.y = 0.003
+  cat.add(catShade)
+  const tailMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(-0.45, 0, 0), new THREE.MeshLambertMaterial({ map: catPose.tail.map, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
+  const tailPivot = new THREE.Group()
+  tailPivot.add(tailMesh)
+  catBody.add(tailPivot)
+  // where the eyes are on the drawings (canvas pixels: see room-things.js), for the pupils and lids
+  const EYES = { loaf: { w: 560, h: 360, at: [[170.6, 167.6], [241.4, 167.6]], r: 20 }, swat: { w: 560, h: 360, at: [[170.6, 167.6], [241.4, 167.6]], r: 20 }, sit: { w: 380, h: 480, at: [[155.5, 183.7], [224.5, 183.7]], r: 19 } }
+  const pupils = [0, 1].map(() => new THREE.Mesh(new THREE.CircleGeometry(1, 14), new THREE.MeshBasicMaterial({ color: '#1c1820' })))
+  const lids = [0, 1].map(() => new THREE.Mesh(new THREE.CircleGeometry(1, 14), new THREE.MeshLambertMaterial({ color: '#fbf8f2' })))
+  for (const m of [...pupils, ...lids]) catBody.add(m)
+  let catNow = null
+  let catW = 0
+  let catHt = 0
+  let catLook = { x: 0, y: 0 }
+  let blinking = 0
+  function catAs(name, facing = 1) {
+    const pose = catPose[name]
+    catNow = name
+    catHt = CAT_H[name]
+    catW = catHt * pose.aspect
+    catMesh.material.map = pose.map
+    catMesh.material.needsUpdate = true
+    catMesh.scale.set(catW * facing, catHt, 1)
+    const eyes = EYES[name]
+    tailMesh.visible = name === 'loaf' || name === 'swat'
+    if (tailMesh.visible) {
+      tailMesh.scale.set(catHt * 0.95, catHt * 0.5, 1)
+      tailPivot.position.set(catW * 0.33 * facing, catHt * 0.16, -0.004)
+      tailMesh.scale.x *= facing
+    }
+    for (const m of [...pupils, ...lids]) m.visible = !!eyes
+    if (eyes) placeEyes()
+  }
+  // the eyes on the drawing, in the cat's own space; the pupils looking toward the pointer
+  function placeEyes() {
+    const eyes = EYES[catNow]
+    if (!eyes) return
+    const edge = 4
+    eyes.at.forEach(([px, py], k) => {
+      const x = ((px + edge) / (eyes.w + edge * 2) - 0.5) * catW
+      const y = (1 - (py + edge) / (eyes.h + edge * 2)) * catHt
+      const r = (eyes.r / (eyes.h + edge * 2)) * catHt
+      pupils[k].scale.set(r * 0.42, r * 0.62, 1)
+      pupils[k].position.set(x + catLook.x * r * 0.42, y + catLook.y * r * 0.3, 0.002)
+      lids[k].scale.set(r * 1.08, r * 1.12, 1)
+      lids[k].position.set(x, y, 0.003)
+      lids[k].visible = blinking > 0
+    })
+  }
+  catAs('loaf')
+
+  // ---- little things that float up: hearts, notes, z's ----------------------------------------------------------
+  const sparkPreps = { heart: heartArt[0], z: zeeArt[0], noteA: noteA[0], noteB: noteB[0] }
+  const sparkMaps = Object.fromEntries(Object.entries(sparkPreps).map(([k, prep]) => [k, { map: texture(prep.front), aspect: prep.aspect }]))
+  const sparks = Array.from({ length: 40 }, () => {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
+    mesh.visible = false
+    room.add(mesh)
+    return { mesh, on: false, age: 0, life: 0, v: V(0, 0, 0), spin: 0, size: 0, path: null }
+  })
+  function spark(kind, at, { size = 0.06, life = 14, v = V(0, 0.02, 0), spin = 0, path = null } = {}) {
+    const s = sparks.find((q) => !q.on)
+    if (!s) return
+    const look = sparkMaps[kind]
+    s.mesh.material.map = look.map
+    s.mesh.material.needsUpdate = true
+    Object.assign(s, { on: true, age: 0, life, v: v.clone(), spin, size, path, aspect: look.aspect })
+    s.mesh.position.copy(at)
+    s.mesh.rotation.set(0, 0, (rand() - 0.5) * 0.6)
+    s.mesh.visible = true
+    s.mesh.scale.set(size * look.aspect, size, 1)
+  }
+  stepped.every(1, () => {
+    let any = false
+    for (const s of sparks) {
+      if (!s.on) continue
+      any = true
+      s.age++
+      const k = s.age / s.life
+      if (s.path) s.path(s, k)
+      else {
+        s.mesh.position.add(s.v)
+        s.mesh.position.x += Math.sin(s.age * 0.6) * 0.003
+      }
+      s.mesh.rotation.z += s.spin
+      const grow = k < 0.2 ? k / 0.2 : k > 0.75 ? Math.max(0, (1 - k) / 0.25) : 1
+      s.mesh.scale.set(s.size * s.aspect * grow, s.size * grow, 1)
+      if (s.age >= s.life) {
+        s.on = false
+        s.mesh.visible = false
+      }
+    }
+    return any && 'looks'
+  })
+
+  // ---- the countdown and the flash ---------------------------------------------------------------------------
   const badges = badgeArts.map((preps, i) => {
-    const b = makeFlat(preps, { width: 0.3 })
-    b.mesh.position.set(camera.group.position.x - 0.08 + (i - 1) * 0.05, 1.46, camera.group.position.z + 0.06)
+    const b = makeFlat(preps, { width: 0.2 })
+    b.mesh.position.set(camera.group.position.x - 0.06 + (i - 1) * 0.04, 1.3, camera.group.position.z + 0.06)
     b.mesh.rotation.z = (i - 1) * -0.12
     b.mesh.visible = false
     b.mesh.castShadow = false
     room.add(b.mesh)
     return b.mesh
   })
-  const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.016, 16), new THREE.MeshBasicMaterial({ color: '#4a1712' }))
-  lamp.position.copy(onCamera(LIGHT, 0.006))
-  camera.hinge.add(lamp)
+  const redLight = new THREE.Mesh(new THREE.CircleGeometry(0.014, 16), new THREE.MeshBasicMaterial({ color: '#4a1712' }))
+  redLight.position.copy(onCamera(LIGHT, 0.006))
+  camera.hinge.add(redLight)
   room.updateWorldMatrix(true, true)
-  const inRoom = (v) => room.worldToLocal(camera.hinge.localToWorld(v))
-  const burst = makeFlat(burstArt, { width: 0.42 })
-  burst.mesh.position.copy(inRoom(onCamera(FLASH, 0.03)))
+  const fromCamera = (v) => room.worldToLocal(camera.hinge.localToWorld(v))
+  const burst = makeFlat(burstArt, { width: 0.38 })
+  burst.mesh.position.copy(fromCamera(onCamera(FLASH, 0.03)))
   burst.mesh.visible = false
   burst.mesh.castShadow = false
   room.add(burst.mesh)
@@ -343,268 +544,695 @@ export async function build({ box, stepped, onShelf }) {
   whiteout.position.set(0, inner.h / 2, -0.02)
   whiteout.visible = false
   room.add(whiteout)
-  let lit = false
-  function setLight(on) {
-    if (on === lit) return false
-    lit = on
-    lamp.material.color.set(on ? '#ff4636' : '#4a1712')
-    return true
-  }
   let flashLevel = 0
   function setFlash(k) {
-    if (k === flashLevel) return false
+    if (k === flashLevel) return
     flashLevel = k
     whiteout.visible = k > 0.01
-    whiteout.material.opacity = 0.8 * k
-    return true
+    whiteout.material.opacity = (inside ? 0.45 : 0.8) * k // (softer up close, every nine seconds)
   }
-  // one big flash over everything as the box is clicked (a fade, not a movement: motion off skips it)
   const bigFlash = document.createElement('div')
   bigFlash.className = 'camera-flash'
   bigFlash.setAttribute('aria-hidden', 'true')
   document.body.append(bigFlash)
-
-  // ---- the loop -------------------------------------------------------------------------------
-  const slotAt = (rise) => inRoom(onCamera(SLOT, -0.012).add(new THREE.Vector3(0, rise, 0)))
-  const inside = slotAt(-PH / 2 - 0.02) // all the way into the camera
-  const out = slotAt(PH * 0.34) // most of the way out
-  const turned = camera.group.rotation.y
-  const front = new THREE.Vector3(-0.04, 1.36, -0.1) // where it is held up to develop
-
-  const pinned = [] // up on the board, in the order they went up
-  let next = 0 // the place the next photo is of
-  let shot = null // the polaroid being taken
-  let clearing = [] // what is coming off a full board
-  let offset = 0 // this time round, the photo waits for the board to clear first
-  let inRoomNow = false // the camera is inside: the loop carries on there
-  let tick = 0
-
-  // The whole scene, as the shelf first shows it: a few photos already up, threads and all.
-  const first = Math.min(2, capacity - 1, count)
-  for (let i = 0; i < first; i++) {
-    const p = polaroids[i]
-    p.place = i
-    develop(p, 1)
-    pinUp(p, i)
-    stretch(p, 1)
-    popHeart(p, 1)
-    pinned.push(p)
-  }
-  next = count ? first % count : 0
-  hangScene(count ? (first + count - 1) % count : 0)
-  unroll(1)
-
-  function takeNext() {
-    const p = polaroids.find((q) => !pinned.includes(q) && !clearing.includes(q))
-    p.place = next
-    next = (next + 1) % count
-    p.k = -1
-    develop(p, 0)
-    p.group.visible = p.pin.visible = p.thread.visible = false
-    p.group.scale.setScalar(1)
-    return p
-  }
-
-  // everything on the board comes down: pins out, threads in, the photos into the memories box
-  function stepClear(t) {
-    clearing.forEach((p, i) => {
-      const s = spots[p.spot]
-      const tp = t - i * 0.1
-      if (tp <= 0) return
-      // the thread pulls back to the map as the pin pops out
-      stretch(p, Math.max(0, 1 - tp / 0.3))
-      popHeart(p, Math.max(0, 1 - tp / 0.3))
-      const py = p.pinAt.y + 0.05 * Math.min(1, tp / 0.08) - 5 * Math.max(0, tp - 0.08) ** 2
-      p.pin.position.set(p.pinAt.x + tp * 0.12, py, p.pinAt.z + Math.min(0.06, tp * 0.4))
-      p.pin.rotation.z = tp * 7
-      p.pin.visible = py > 0.05 && tp < 0.9
-      // the photo: a swing, then down into the box
-      const tf = tp - 0.12
-      if (tf <= 0) return
-      const k = Math.min(1, tf / 0.75)
-      const to = new THREE.Vector3(memories.group.position.x - 0.12 + (i % 3) * 0.12, memoriesTop - 0.06, memories.group.position.z - 0.07)
-      p.group.position.set(lerp(s.x, to.x, smooth(k)), lerp(s.y, to.y, k * k), lerp(s.z, to.z, k))
-      p.group.rotation.z = s.tilt * (1 - k) + Math.sin(tf * 10) * 0.2 * (1 - k)
-      p.group.visible = k < 1
+  // what the room behind a polaroid held up goes to
+  const dimmer = new THREE.Mesh(new THREE.PlaneGeometry(inner.w + 0.2, inner.h + 0.2), new THREE.MeshBasicMaterial({ color: '#141630', transparent: true, opacity: 0, depthWrite: false }))
+  dimmer.position.set(0, inner.h / 2, -0.14)
+  dimmer.visible = false
+  room.add(dimmer)
+  const dimTo = (to) => {
+    const from = dimmer.material.opacity
+    return stepped.poses([0.35, 0.7, 1].map((t) => lerp(from, to, t)), (o) => {
+      dimmer.material.opacity = o
+      dimmer.visible = o > 0.01
     })
   }
 
-  function placeShot(u) {
-    const p = shot
-    if (u < OUT[0]) {
-      if (!p.group.visible) return false
-      p.group.visible = false
-      return true
-    }
-    if (u < RISE[0]) {
-      // up out of the slot (the camera's body hides what is still inside)
-      p.group.visible = true
-      p.group.position.lerpVectors(inside, out, smooth((u - OUT[0]) / (OUT[1] - OUT[0])))
-      p.group.rotation.set(0, turned, 0)
-      p.group.scale.setScalar(1)
-      return true
-    }
-    if (u < DEVELOP[0]) {
-      // off the camera, up to the front, growing and turning to face you
-      const k = smooth((u - RISE[0]) / (RISE[1] - RISE[0]))
-      p.group.visible = true
-      p.group.position.lerpVectors(out, front, k)
-      p.group.position.y += Math.sin(Math.PI * k) * 0.12
-      p.group.rotation.set(0, turned * (1 - k), Math.sin(Math.PI * k) * 0.25)
-      p.group.scale.setScalar(lerp(1, BIG, k))
-      return true
-    }
-    if (u < FLY[0]) {
-      // shaken while it develops, out of the white
-      const k = Math.min(1, (u - DEVELOP[0]) / (DEVELOP[1] - DEVELOP[0]))
-      const shake = (tick % 2 ? 1 : -1) * 0.06 * (1 - k * 0.6)
-      p.group.visible = true
-      p.group.position.set(front.x + shake * 0.15, front.y + Math.abs(shake) * 0.1, front.z)
-      p.group.rotation.set(0, 0, shake)
-      p.group.scale.setScalar(BIG)
-      develop(p, Math.round(k * 16) / 16)
-      return true
-    }
-    const spot = pinned.length
-    const s = spots[spot]
-    develop(p, 1)
-    if (u < PIN) {
-      // off to the corkboard, in an arc, shrinking to fit
-      const k = smooth((u - FLY[0]) / (FLY[1] - FLY[0]))
-      const a = 1 - k
-      p.group.visible = true
-      p.group.position.set(
-        a * a * front.x + 2 * a * k * (front.x + s.x) * 0.5 + k * k * s.x,
-        a * a * front.y + 2 * a * k * (Math.max(front.y, s.y) + 0.35) + k * k * s.y,
-        a * a * front.z + 2 * a * k * (front.z - 0.4) + k * k * s.z,
-      )
-      p.group.rotation.set(0, 0, s.tilt * k + Math.sin(Math.PI * k) * 0.5)
-      p.group.scale.setScalar(lerp(BIG, 1, k))
-      return true
-    }
-    const k = (u - PIN) / 0.25
-    if (k < 1) {
-      pinUp(p, spot, 1 + 0.07 * (1 - k), 1 + 0.7 * (1 - k)) // the pin goes in; the photo gives a little bump
-      return true
-    }
-    pinUp(p, spot)
-    pinned.push(p)
-    shot = null
-    return true
+  // ---- where a point on the screen falls, in the room (for things held up in front of you) -------------------------
+  const ndc = new THREE.Vector3()
+  const inv = new THREE.Matrix4()
+  function screenSpot(nx, ny, z) {
+    lens.updateMatrixWorld()
+    room.updateWorldMatrix(true, false)
+    inv.copy(room.matrixWorld).invert()
+    const origin = new THREE.Vector3().setFromMatrixPosition(lens.matrixWorld).applyMatrix4(inv)
+    const far = ndc.set(nx, ny, 0.5).unproject(lens).applyMatrix4(inv)
+    const dir = far.sub(origin).normalize()
+    return origin.clone().add(dir.multiplyScalar((z - origin.z) / dir.z))
+  }
+  // how tall something has to be to fill `share` of the screen's height, at that point
+  const tallFor = (at, share) => {
+    const d = new THREE.Vector3().setFromMatrixPosition(lens.matrixWorld).distanceTo(room.localToWorld(at.clone()))
+    return 2 * d * Math.tan(THREE.MathUtils.degToRad(lens.fov / 2)) * share
   }
 
+  // ---- the state of the room ---------------------------------------------------------------------------------------
+  let inside = false // the camera is in the room
+  let busy = false // something is playing out (a polaroid flying, the violin)
+  const idle = () => inside && !busy && !ui.open
+  const hover = (object, on, lift = 0.03) => {
+    const mine = (object.userData.hover = (object.userData.hover || 0) + 1)
+    const from = object.userData.lift || 0
+    const to = on ? lift : 0
+    stepped.poses([0.5, 1].map((t) => lerp(from, to, t)), (y) => {
+      if (mine !== object.userData.hover) return
+      object.position.y += y - (object.userData.lift || 0)
+      object.userData.lift = y
+    })
+  }
+
+  // ---- the loop: her camera takes her photo, in one city after another ------------------------------------------------
+  const loopFace = canvas(256, 307)
+  const loopMap = texture(loopFace)
+  const loopShot = new THREE.Group()
+  const loopFront = new THREE.Mesh(sheet, new THREE.MeshLambertMaterial({ map: loopMap }))
+  loopFront.castShadow = true
+  loopShot.add(loopFront, new THREE.Mesh(sheet, backLook))
+  loopShot.visible = false
+  room.add(loopShot)
+  const inSlot = fromCamera(onCamera(SLOT, -0.012).add(V(0, -PH / 2 - 0.02, 0)))
+  const outSlot = fromCamera(onCamera(SLOT, -0.012).add(V(0, PH * 0.34, 0)))
+  const turned = camera.group.rotation.y
+  const FRONT = V(0.05, 1.3, -0.12)
+  const LOOP_BIG = 3.1
+  let nextCity = 0
+  let taking = null // the polaroid this round is of
+  let develop = -1
+  let tickCount = 0
+  function developTo(k) {
+    if (develop === k || !taking) return
+    develop = k
+    things.cityPolaroid(loopFace, taking.photo, taking.p.city, null, k)
+    loopMap.needsUpdate = true
+  }
   const BADGE_POP = [0.5, 1.25, 1.05, 1]
-  const HOP = [0.07, 0.11, 0.07, 0.03, 0]
+  const HOP = [0.06, 0.1, 0.06, 0.02, 0]
   const RECOIL = [-0.04, 0.025, -0.01, 0]
   const BURST = [0.6, 1.3, 1.1, 0.75, 0.35]
+  let rushing = false // clicked: straight to the flash
   const clock = loopClock(stepped, {
     box,
     group: room,
     period: LOOP,
-    active: () => count > 0 && (inRoomNow || onShelf()),
+    active: () => (onShelf() || (inside && !ui.open && !viewing3d)) && !violinOut,
     tick(t, prev) {
-      tick++
+      tickCount++
       if (passed(prev, t, 0)) {
-        // a new photo; if the board is full, it comes down first
-        if (shot) {
-          shot.group.visible = shot.pin.visible = false
-          shot = null
-        }
-        offset = 0
-        if (pinned.length >= capacity) {
-          clearing = pinned.splice(0)
-          offset = CLEAR
-        }
-        shot = takeNext()
+        // a new photo: the next city; its polaroid comes off the board meanwhile
+        if (taking) finishShot()
+        taking = polaroids[nextCity]
+        nextCity = (nextCity + 1) % polaroids.length
+        taking.group.visible = taking.pin.visible = false
+        develop = -1
+        developTo(0)
       }
-      if (clearing.length) {
-        stepClear(t)
-        if (t >= CLEAR) {
-          for (const p of clearing) {
-            p.group.visible = p.pin.visible = p.thread.visible = false
-            p.pin.rotation.z = 0
-            popHeart(p, 0)
-          }
-          clearing = []
-        }
-      }
-      const u = t - offset
-      // the backdrop rolls up and comes down on the next place
-      if (u >= ROLL[0] && u < ROLL[3]) {
-        if (u < ROLL[1]) unroll(1 - smooth((u - ROLL[0]) / (ROLL[1] - ROLL[0])))
-        else if (u < ROLL[2]) {
-          unroll(0)
-          hangScene(shot.place)
-        } else unroll(smooth((u - ROLL[2]) / (ROLL[3] - ROLL[2])))
-      } else if (u >= ROLL[3]) {
-        hangScene(shot ? shot.place : showingScene)
-        unroll(1)
-      }
-      // her pose: the peace sign from the countdown until the photo is out
-      strike(u >= COUNT[0] && u < RISE[1] + 0.3 ? 'peace' : 'idle')
-      // 3, 2, 1, the red light blinking with each
+      const u = t
+      if (!taking) return false
+      strike(u >= COUNT[0] && u < RISE[1] + 0.3 ? 'peace' : pose === 'wave' ? 'wave' : 'idle')
       let blink = false
       badges.forEach((b, i) => {
         const k = (u - COUNT[i]) / 0.45
-        b.visible = k >= 0 && k < 1
+        b.visible = !rushing && k >= 0 && k < 1
         if (!b.visible) return
-        b.scale.setScalar(BADGE_POP[Math.min(BADGE_POP.length - 1, Math.floor(k * 8))] * (k > 0.85 ? 0.6 : 1))
+        b.scale.setScalar(BADGE_POP[Math.min(3, Math.floor(k * 8))] * (k > 0.85 ? 0.6 : 1))
         if (k < 0.55) blink = true
       })
-      setLight(blink)
-      // the flash: a starburst, the box goes white, she hops, the camera kicks
+      redLight.material.color.set(blink ? '#ff4636' : '#4a1712')
       const f = (u - SNAP) / 0.45
       const flashing = f >= 0 && f < 1
       const frame = flashing ? Math.min(4, Math.floor(f * 5)) : -1
+      if (passed(prev, t, SNAP)) sound.play('shutter')
       burst.mesh.visible = flashing
       if (flashing) burst.mesh.scale.setScalar(BURST[frame])
       setFlash(flashing ? Math.round((1 - f) * 6) / 6 : 0)
-      const hop = flashing ? HOP[frame] : 0
-      for (const piece of Object.values(her)) piece.group.position.y = hop
+      for (const piece of Object.values(her)) piece.group.position.y = flashing ? HOP[frame] : 0
       camera.hinge.rotation.z = flashing ? RECOIL[Math.min(3, frame)] : 0
-      if (shot) placeShot(u)
-      // the thread and the heart for the photo just pinned
-      const last = pinned.at(-1)
-      if (last && !shot) {
-        const k = (u - THREAD[0]) / (THREAD[1] - THREAD[0])
-        if (k >= 0 && k <= 1.2) stretch(last, Math.min(1, smooth(k)))
-        const h = (u - HEART) / 0.25
-        if (h >= 0 && h < 1) popHeart(last, [0.5, 1.35, 1.1, 1][Math.floor(h * 4)])
-        else if (h >= 1) popHeart(last, 1)
-      }
-      return clearing.length > 0 || !!shot || (u >= 0 && u < HEART + 0.3)
+      // the polaroid
+      if (u < OUT[0]) loopShot.visible = false
+      else if (u < RISE[0]) {
+        loopShot.visible = true
+        loopShot.position.lerpVectors(inSlot, outSlot, smooth((u - OUT[0]) / (OUT[1] - OUT[0])))
+        loopShot.rotation.set(0, turned, 0)
+        loopShot.scale.setScalar(1)
+      } else if (u < DEVELOP[0]) {
+        const k = smooth((u - RISE[0]) / (RISE[1] - RISE[0]))
+        loopShot.position.lerpVectors(outSlot, FRONT, k)
+        loopShot.position.y += Math.sin(Math.PI * k) * 0.1
+        loopShot.rotation.set(0, turned * (1 - k), Math.sin(Math.PI * k) * 0.25)
+        loopShot.scale.setScalar(lerp(1, LOOP_BIG, k))
+      } else if (u < FLY[0]) {
+        const k = Math.min(1, (u - DEVELOP[0]) / (DEVELOP[1] - DEVELOP[0]))
+        const shake = (tickCount % 2 ? 1 : -1) * 0.06 * (1 - k * 0.6)
+        loopShot.position.set(FRONT.x + shake * 0.12, FRONT.y + Math.abs(shake) * 0.08, FRONT.z)
+        loopShot.rotation.set(0, 0, shake)
+        loopShot.scale.setScalar(LOOP_BIG)
+        developTo(Math.round(k * 16) / 16)
+      } else if (u < PIN) {
+        developTo(1)
+        const k = smooth((u - FLY[0]) / (FLY[1] - FLY[0]))
+        const a = 1 - k
+        const to = taking.home
+        loopShot.position.set(a * a * FRONT.x + 2 * a * k * (FRONT.x + to.x) * 0.5 + k * k * to.x, a * a * FRONT.y + 2 * a * k * (Math.max(FRONT.y, to.y) + 0.3) + k * k * to.y, a * a * FRONT.z + 2 * a * k * (FRONT.z - 0.3) + k * k * to.z)
+        loopShot.rotation.set(0, 0, taking.tilt * k + Math.sin(Math.PI * k) * 0.5)
+        loopShot.scale.setScalar(lerp(LOOP_BIG, 1, k))
+      } else if (loopShot.visible) finishShot()
+      return true
     },
   })
-  // the fairy lights twinkle; she breathes a little while she waits
-  stepped.every(2, (frame) => {
-    if (!(inRoomNow || onShelf()) || !room.visible) return false
+  // the photo lands in its place on the board, and is pinned
+  function finishShot() {
+    loopShot.visible = false
+    rushing = false
+    if (!taking) return
+    const t = taking
+    t.group.visible = t.pin.visible = true
+    sound.play('pop')
+    stepped.poses([1.5, 1.15, 1], (s) => t.pin.scale.setScalar(s))
+    stepped.poses([1.08, 1], (s) => t.group.scale.setScalar(s))
+    taking = null
+  }
+  // clicked: a photo straight away (if one is not already on its way)
+  function snapNow() {
+    if (!idle()) return
+    const t = clock.time % LOOP
+    if (clock.time >= 0 && t >= SNAP - 0.05) return
+    rushing = true
+    clock.time = (clock.time < 0 ? 0 : clock.time - t) + SNAP - 0.04
+  }
+
+  // ---- a polaroid off the board, held up big --------------------------------------------------------------------------
+  const bigFace = canvas(640, 768)
+  const bigMap = texture(bigFace)
+  const bigPhoto = canvas(560, 560)
+  let viewing3d = null
+  async function showPolaroid(pol) {
+    if (!idle() || pol === taking) return
+    busy = true
+    viewing3d = pol
+    sound.play('pop')
+    pol.pin.visible = false
+    paintScene(bigPhoto, pol)
+    things.cityPolaroid(bigFace, bigPhoto, pol.p.city, pol.p.caption, 1)
+    bigMap.needsUpdate = true
+    pol.front.material.map = bigMap
+    pol.front.material.needsUpdate = true
+    const at = screenSpot(0, 0.12, 0.18) // (in front of the box's opening, so its frame never cuts across it)
+    // as big as fits: most of the screen's height, but never wider than most of its width
+    const scale = Math.min(tallFor(at, 0.56) / PH, (tallFor(at, 0.82) * lens.aspect) / PW)
+    const from = pol.group.position.clone()
+    const fromTilt = pol.group.rotation.z
+    dimTo(0.5)
+    sound.play('paper')
+    await stepped.poses([0.1, 0.25, 0.45, 0.65, 0.82, 0.94, 1], (k) => {
+      pol.group.position.lerpVectors(from, at, k)
+      pol.group.position.z += Math.sin(Math.PI * k) * 0.25
+      pol.group.rotation.set(0, Math.sin(Math.PI * k) * 0.4, lerp(fromTilt, -0.02, k))
+      pol.group.scale.setScalar(lerp(1, scale, k))
+    })
+    busy = false
+    const photos = photosOf(pol.p)
+    const controls = () =>
+      ui.polaroid({
+        city: pol.p.city,
+        hasPhotos: photos.length > 0,
+        onPhotos: () => ui.gallery({ city: pol.p.city, photos, onClose: controls }),
+        onPinBack: () => putBack(pol),
+      })
+    controls()
+  }
+  async function putBack(pol) {
+    if (viewing3d !== pol) return
+    busy = true
+    const from = pol.group.position.clone()
+    const fromScale = pol.group.scale.x
+    dimTo(0)
+    await stepped.poses([0.1, 0.3, 0.55, 0.78, 0.94, 1], (k) => {
+      pol.group.position.lerpVectors(from, pol.home, k)
+      pol.group.position.z += Math.sin(Math.PI * k) * 0.2
+      pol.group.rotation.set(0, Math.sin(Math.PI * k) * -0.3, lerp(-0.02, pol.tilt, k))
+      pol.group.scale.setScalar(lerp(fromScale, 1, k))
+    })
+    pol.front.material.map = pol.small
+    pol.front.material.needsUpdate = true
+    pol.pin.visible = true
+    sound.play('pop')
+    stepped.poses([1.5, 1.15, 1], (s) => pol.pin.scale.setScalar(s))
+    viewing3d = null
+    busy = false
+    pol.spot?.node.focus({ preventScroll: true })
+  }
+
+  // ---- the violin: out of its case, a few bars, and the notes become her performances ---------------------------------
+  let violinOut = false
+  const toRoom = (object) => {
+    object.updateWorldMatrix(true, false)
+    const m = new THREE.Matrix4().copy(inv.copy(room.matrixWorld).invert()).multiply(object.matrixWorld)
+    const p = new THREE.Vector3()
+    const q = new THREE.Quaternion()
+    const s = new THREE.Vector3()
+    m.decompose(p, q, s)
+    return { p, q }
+  }
+  const caseMouth = () => room.worldToLocal(violinCase.hinge.localToWorld(V(0, 0.5, 0.05)))
+  async function playViolin() {
+    if (!idle() || violinOut) return
+    if (stepped.reduced) return openMusic()
+    busy = violinOut = true
+    // out of the case, to a playing position in front of you
+    const v0 = toRoom(violin.mesh)
+    const b0 = toRoom(bowFlat.mesh)
+    room.attach(violin.mesh)
+    room.attach(bowFlat.mesh)
+    const vAt = screenSpot(-0.18, 0.05, -0.2)
+    const bAt = vAt.clone().add(V(0.12, 0.05, 0.03))
+    const vq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -0.85))
+    const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0.75))
+    const vs = tallFor(vAt, 0.42) / violin.height
+    await stepped.poses([0.1, 0.3, 0.55, 0.8, 0.95, 1], (k) => {
+      violin.mesh.position.lerpVectors(v0.p, vAt, k)
+      violin.mesh.quaternion.slerpQuaternions(v0.q, vq, k)
+      violin.mesh.scale.setScalar(lerp(1, vs, k))
+      bowFlat.mesh.position.lerpVectors(b0.p, bAt, k)
+      bowFlat.mesh.quaternion.slerpQuaternions(b0.q, bq, k)
+      bowFlat.mesh.scale.setScalar(lerp(1, vs, k))
+    })
+    sound.play('violin')
+    // the bow draws across, back and forth; notes stream out and swirl toward you
+    const across = V(Math.cos(0.75 + Math.PI / 2), Math.sin(0.75 + Math.PI / 2), 0).multiplyScalar(0.18 * vs * 0.4)
+    const swirl = (s, k) => {
+      const a = s.a0 + k * 5
+      const r = s.r0 + k * 0.5
+      s.mesh.position.set(s.c.x + Math.cos(a) * r, s.c.y + Math.sin(a) * r * 0.7 + k * 0.3, s.c.z + k * 0.15)
+    }
+    for (let n = 0; n < 4; n++) {
+      await stepped.poses([0.5, 1, 0.5, 0, -0.5, -1, -0.5, 0], (k) => bowFlat.mesh.position.copy(bAt).addScaledVector(across, k))
+      for (let q = 0; q < 4; q++) {
+        const s = sparks.find((x) => !x.on)
+        spark(rand() < 0.5 ? 'noteA' : 'noteB', vAt, { size: 0.07, life: 18, path: swirl })
+        if (s) Object.assign(s, { c: vAt.clone(), a0: rand() * Math.PI * 2, r0: 0.05 + rand() * 0.08 })
+      }
+    }
+    busy = false
+    openMusic()
+  }
+  function openMusic() {
+    violinOut = true
+    sound.play('paper')
+    ui.music({ pieces: about.music, files, onClose: putViolinAway })
+  }
+  async function putViolinAway() {
+    if (!violin.mesh.parent || violin.mesh.parent === violinCase.hinge) {
+      violinOut = false
+      return
+    }
+    busy = true
+    // the notes swirl back into the case, and the violin settles into it
+    const mouthAt = caseMouth()
+    for (let q = 0; q < 10; q++) {
+      const s = sparks.find((x) => !x.on)
+      const start = screenSpot((rand() - 0.5) * 0.8, (rand() - 0.5) * 0.6, -0.25)
+      spark(rand() < 0.5 ? 'noteA' : 'noteB', start, { size: 0.07, life: 14, path: (sp, k) => sp.mesh.position.lerpVectors(sp.from, sp.to, smooth(k)) })
+      if (s) Object.assign(s, { from: start, to: mouthAt })
+    }
+    violinCase.hinge.attach(violin.mesh)
+    violinCase.hinge.attach(bowFlat.mesh)
+    const vFrom = violin.mesh.position.clone()
+    const vqFrom = violin.mesh.quaternion.clone()
+    const bFrom = bowFlat.mesh.position.clone()
+    const bqFrom = bowFlat.mesh.quaternion.clone()
+    const vqTo = new THREE.Quaternion().setFromEuler(violinHome.rotation)
+    const bqTo = new THREE.Quaternion().setFromEuler(bowHome.rotation)
+    const vsFrom = violin.mesh.scale.x
+    await stepped.poses([0.15, 0.35, 0.6, 0.82, 0.95, 1], (k) => {
+      violin.mesh.position.lerpVectors(vFrom, violinHome.position, k)
+      violin.mesh.quaternion.slerpQuaternions(vqFrom, vqTo, k)
+      violin.mesh.scale.setScalar(lerp(vsFrom, 1, k))
+      bowFlat.mesh.position.lerpVectors(bFrom, bowHome.position, k)
+      bowFlat.mesh.quaternion.slerpQuaternions(bqFrom, bqTo, k)
+      bowFlat.mesh.scale.setScalar(lerp(vsFrom, 1, k))
+    })
+    busy = violinOut = false
+  }
+
+  // ---- the cat ------------------------------------------------------------------------------------------------------
+  let catMood = 'loaf' // 'loaf' | 'sleep' | 'happy' | 'act' (a reaction, a walk) | 'notebook'
+  let quiet = 0 // ticks since anyone paid it attention
+  let unnoticed = 0 // ticks in the room since anyone paid it attention
+  let happyLeft = 0
+  let catRun = 0
+  let toy = null
+  function settleCat() {
+    catMood = 'loaf'
+    cat.position.copy(CAT_HOME)
+    cat.rotation.set(0, 0, 0)
+    catAs('loaf')
+  }
+  const catHead = () => room.localToWorld(cat.position.clone().add(V(-catW * 0.14, catHt * 0.62, 0)))
+  async function walkCat(to, ticksPerStep = 3) {
+    const from = cat.position.clone()
+    const d = from.distanceTo(to)
+    const steps = Math.max(2, Math.round(d / 0.05))
+    const facing = to.x >= from.x ? 1 : -1
+    for (let k = 1; k <= steps; k++) {
+      catAs(k % 2 ? 'walk1' : 'walk2', facing)
+      cat.position.lerpVectors(from, to, k / steps)
+      await stepped.wait(ticksPerStep)
+    }
+  }
+  async function hop(to) {
+    const from = cat.position.clone()
+    await stepped.poses([0.15, 0.35, 0.55, 0.75, 0.92, 1], (k) => {
+      cat.position.lerpVectors(from, to, k)
+      cat.position.y += Math.sin(Math.PI * k) * 0.25
+    })
+  }
+  async function catReaction() {
+    const mine = ++catRun
+    catMood = 'act'
+    quiet = unnoticed = 0
+    const pick = ['belly', 'stretch', 'yawn', 'swat', 'visit'][Math.floor(rand() * 5)]
+    if (pick === 'visit' && !stepped.reduced) {
+      // over to her, a rub against her leg, and back to the rug
+      await walkCat(V(HER.x + 0.2, 0, HER.z + 0.16))
+      catAs('sit')
+      for (let k = 0; k < 3; k++) {
+        await stepped.poses([0.05, -0.05, 0], (a) => (cat.rotation.z = a))
+        spark('heart', room.worldToLocal(catHead()), { size: 0.06, life: 14, v: V(0, 0.018, 0) })
+      }
+      await stepped.wait(10)
+      await walkCat(CAT_HOME)
+    } else if (pick === 'swat' && !stepped.reduced) {
+      // a toy on a string dangles down; the cat swats at it
+      toy = toy || makeFlat(toyArt, { height: 0.5 })
+      toy.mesh.castShadow = false
+      room.add(toy.mesh)
+      const top = V(cat.position.x - 0.12, 0.75, cat.position.z + 0.03)
+      await stepped.poses([1.05, 0.85, 0.66, 0.58, 0.6], (y) => toy.mesh.position.set(top.x, y, top.z))
+      for (let k = 0; k < 4; k++) {
+        catAs('swat')
+        await stepped.poses([0.08, 0.14, 0.06], (a) => (toy.mesh.rotation.z = a))
+        catAs('loaf')
+        await stepped.poses([-0.05, 0], (a) => (toy.mesh.rotation.z = a))
+      }
+      await stepped.poses([0.7, 0.9, 1.1], (y) => (toy.mesh.position.y = y))
+      room.remove(toy.mesh)
+    } else {
+      catAs(pick === 'visit' || pick === 'swat' ? 'yawn' : pick)
+      if (pick === 'belly') spark('heart', room.worldToLocal(catHead()), { size: 0.07, life: 16 })
+      await stepped.wait(pick === 'belly' ? 36 : 22)
+    }
+    if (mine === catRun) settleCat()
+  }
+  // left alone long enough, it goes and sits on her notebook
+  async function sitOnNotebook() {
+    const mine = ++catRun
+    catMood = 'act'
+    await walkCat(V(DESK.x + 0.1, 0, -1.15))
+    if (mine !== catRun) return
+    await hop(V(1.2, DESK.top, DESK.z + 0.06))
+    catAs('sit')
+    catMood = 'notebook'
+  }
+  async function offNotebook() {
+    const mine = ++catRun
+    catMood = 'act'
+    await hop(V(DESK.x + 0.1, 0, -1.15))
+    await walkCat(CAT_HOME)
+    if (mine === catRun) settleCat()
+  }
+  function stroke() {
+    quiet = unnoticed = 0
+    if (catMood === 'act' || catMood === 'notebook') return
+    if (catMood !== 'happy') {
+      catMood = 'happy'
+      catAs('happy')
+      sound.play('purr')
+    }
+    happyLeft = 14
+  }
+  // breathing, blinking, a flick of the tail, falling asleep and waking; hearts while it is stroked
+  stepped.every(1, (frame) => {
+    if (!(onShelf() || inside) || stepped.reduced) return false
     let changed = false
-    twinkle.forEach((left, k) => {
-      if (left > 0) {
-        twinkle[k] = left - 1
-        if (left === 1) changed = true
-      } else if (rand() < 0.04) {
-        twinkle[k] = 1 + Math.floor(rand() * 3)
+    quiet++
+    if (inside && catMood === 'loaf') unnoticed++
+    if (catMood === 'happy') {
+      if (frame % 6 === 0) spark('heart', room.worldToLocal(catHead()).add(V((rand() - 0.5) * 0.1, 0.05, 0.02)), { size: 0.05, life: 14 })
+      if (frame % 14 === 0) sound.play('purr')
+      if (--happyLeft <= 0) settleCat()
+      changed = true
+    }
+    if (catMood === 'loaf' && quiet > 260) {
+      catMood = 'sleep'
+      catAs('sleep')
+      changed = true
+    }
+    if (catMood === 'sleep') {
+      if (frame % 16 === 0) spark('z', room.worldToLocal(catHead()).add(V(0.04, 0.06, 0)), { size: 0.05, life: 22, v: V(0.004, 0.012, 0) })
+      if (quiet > 420) {
+        quiet = 0
+        settleCat()
         changed = true
       }
-    })
-    if (changed) paintBulbs()
-    if (pose === 'idle' && !stepped.reduced) her.idle.hinge.rotation.z = Math.sin(frame * 0.12) * 0.012
-    return 'looks'
+    }
+    if (catMood === 'loaf' && inside && unnoticed > 540) {
+      unnoticed = 0
+      sitOnNotebook()
+    }
+    // breathing
+    if (catMood === 'loaf' || catMood === 'sleep' || catMood === 'happy') {
+      const s = Math.floor(frame / 14) % 2 ? 1.025 : 1
+      if (catBody.scale.y !== s) {
+        catBody.scale.y = s
+        changed = true
+      }
+    }
+    // blinking
+    if (blinking > 0) {
+      blinking--
+      placeEyes()
+      changed = true
+    } else if (EYES[catNow] && rand() < 0.012) {
+      blinking = 2
+      placeEyes()
+      changed = true
+    }
+    // the tail
+    if (tailMesh.visible) {
+      const a = frame % 40 < 6 ? [0.18, 0.3, 0.18, 0.05, -0.06, 0][frame % 40] : 0
+      if (tailPivot.rotation.z !== a) {
+        tailPivot.rotation.z = a
+        changed = true
+      }
+    }
+    return changed && 'looks'
   })
 
-  boil(stepped, [her.idle, her.peace, camera, memories], () => inRoomNow || onShelf())
+  // ---- the pennants flutter --------------------------------------------------------------------------------------------
+  stepped.every(1, (frame) => {
+    let any = false
+    for (const pen of pennants) {
+      if (pen.flutter <= 0) continue
+      any = true
+      pen.flutter--
+      const pos = pen.geometry.attributes.position
+      const w = PEN_W
+      for (let k = 0; k < pos.count; k++) {
+        const x = pen.rest[k * 3]
+        const along = (x + w / 2) / w
+        pos.setZ(k, Math.sin(along * 7 - frame * 0.9) * 0.022 * along * Math.min(1, pen.flutter / 6))
+      }
+      pos.needsUpdate = true
+    }
+    return any && 'looks'
+  })
+
+  // ---- the buttons ------------------------------------------------------------------------------------------------------
+  const four = () => [V(0, 0, 0), V(0, 0, 0), V(0, 0, 0), V(0, 0, 0)]
+  const cornersOf = (object, w, h, cx = 0, cy = 0) => {
+    const c = four()
+    return () => {
+      const W = typeof w === 'function' ? w() : w
+      const H = typeof h === 'function' ? h() : h
+      c[0].set(cx - W / 2, cy - H / 2, 0)
+      c[1].set(cx + W / 2, cy - H / 2, 0)
+      c[2].set(cx - W / 2, cy + H / 2, 0)
+      c[3].set(cx + W / 2, cy + H / 2, 0)
+      for (const p of c) object.localToWorld(p)
+      return c
+    }
+  }
+  const pieceCorners = (piece) => cornersOf(piece.hinge, piece.width, piece.height, 0, piece.height / 2)
+  const narrow = () => innerWidth < 700
+  // (the camera's loop waits while something is open: whatever it had in the air comes down first)
+  function calm() {
+    for (const b of badges) b.visible = false
+    burst.mesh.visible = false
+    setFlash(0)
+    redLight.material.color.set('#4a1712')
+    camera.hinge.rotation.z = 0
+    for (const piece of Object.values(her)) piece.group.position.y = 0
+    redraw()
+  }
+  const spot = (label, corners, onClick, { onHover, onMove, visible = () => true } = {}) => {
+    const s = overlay.addSpot({
+      group: box.id,
+      label,
+      corners,
+      onClick: () => {
+        calm()
+        onClick()
+      },
+      onHover,
+      onMove,
+      visible: () => idle() && visible(),
+    })
+    s.node.dataset.tag = label
+    return s
+  }
+  for (const pol of polaroids) {
+    pol.spot = spot(`${pol.p.city}: ${pol.p.caption}`, cornersOf(pol.group, PW, PH), () => showPolaroid(pol), {
+      visible: () => !narrow() && pol !== taking,
+      onHover(on) {
+        if (pol.lifted === on || viewing3d === pol) return
+        pol.lifted = on
+        const mine = ++pol.run
+        stepped.poses(on ? [0.5, 1] : [0.5, 0], (k) => {
+          if (mine !== pol.run || viewing3d === pol) return
+          pol.group.position.z = pol.home.z + 0.04 * k
+          pol.group.scale.setScalar(1 + 0.3 * k)
+          pol.group.rotation.z = lerp(pol.tilt, pol.tilt * 0.3 + 0.08, k)
+        })
+      },
+    })
+  }
+  // on a phone the polaroids are too small to aim at: the whole board opens as a grid
+  const thumbs = []
+  spot(`${places.length} cities and counting`, cornersOf(board.mesh, board.width, board.height), () => {
+    if (!thumbs.length) for (const pol of polaroids) thumbs.push(pol.small.image.toDataURL('image/jpeg', 0.85))
+    ui.grid({
+      places,
+      thumbs,
+      onPick: (i) => {
+        ui.close(true)
+        showPolaroid(polaroids[i])
+      },
+    })
+  }, { visible: narrow })
+  spot('her camera: take a photo', pieceCorners(camera), () => snapNow(), { onHover: (on) => hover(camera.group, on) })
+  spot('laptop: github', pieceCorners(laptop), () => {
+    hover(laptop.group, false)
+    window.open(contact('GitHub'), '_blank', 'noopener')
+  }, { onHover: (on) => hover(laptop.group, on) })
+  spot('card holder: linkedin', pieceCorners(holder), async () => {
+    bizCard.mesh.visible = true
+    const at = room.worldToLocal(holder.hinge.localToWorld(V(0, holder.height * 0.6, 0.02)))
+    await stepped.poses([0.04, 0.09, 0.13, 0.12], (y) => bizCard.mesh.position.set(at.x, at.y + y, at.z))
+    sound.play('flick')
+    ui.card({ name: 'nahiyan srotosshini', url: contact('LinkedIn'), onClose: () => (bizCard.mesh.visible = false) })
+  }, { onHover: (on) => hover(holder.group, on) })
+  spot('envelope: email', cornersOf(envBody.mesh, envBody.width, envBody.height), async () => {
+    sound.play('paper')
+    await stepped.poses([-0.6, -1.4, -2.2, -2.6], (a) => (flapHinge.rotation.x = a))
+    await stepped.poses([0.03, 0.07, 0.1], (y) => (letter.mesh.position.y = y))
+    ui.letter({
+      email: contactValue('Email'),
+      onClose: async () => {
+        await stepped.poses([0.05, 0], (y) => (letter.mesh.position.y = y))
+        await stepped.poses([-1.6, -0.6, 0], (a) => (flapHinge.rotation.x = a))
+      },
+    })
+  }, { onHover: (on) => hover(envelope, on, 0.02) })
+  spot('folder: cv', pieceCorners(folder), () => {
+    if (!files.includes(about.cv)) return ui.toast('her cv is on its way')
+    const a = document.createElement('a')
+    a.href = `${import.meta.env.BASE_URL}${about.cv}`
+    a.download = 'Srotosshini-CV.pdf'
+    a.click()
+  }, { onHover: (on) => hover(folder.group, on) })
+  spot('notebook: about me', cornersOf(notebook.mesh, notebook.width, notebook.height), () => {
+    sound.play('paper')
+    if (catMood === 'notebook') offNotebook()
+    ui.notebook({ bio: about.bio })
+  }, { onHover: (on) => hover(notebook.mesh, on, 0.015) })
+  spot('desk lamp: night or day', pieceCorners(lampPiece), () => setNight(!night), { onHover: (on) => hover(lampPiece.group, on) })
+  spot('violin: play', pieceCorners(violinCase), () => playViolin(), {
+    onHover(on) {
+      hover(violinCase.group, on, 0.02)
+      if (!on || stepped.reduced) return
+      sound.play('hum')
+      const at = caseMouth()
+      for (let k = 0; k < 3; k++) spark(k % 2 ? 'noteA' : 'noteB', at.clone().add(V((rand() - 0.5) * 0.1, k * 0.05, 0.05)), { size: 0.05, life: 16 + k * 3, v: V(0.002, 0.014, 0), spin: 0.03 })
+    },
+  })
+  pennants.forEach((pen) => {
+    spot(`pennant: ${pen.school.short}`, cornersOf(pen.mesh, PEN_W, () => PEN_W / pennantArts[0][0].aspect), () => {
+      sound.play('paper')
+      ui.report({ education: about.education })
+    }, { onHover: (on) => on && !stepped.reduced && (pen.flutter = 20) })
+  })
+  const catSpot = spot('her cat', cornersOf(catBody, () => Math.abs(catW), () => catHt, 0, catHt / 2), () => {
+    if (catMood === 'notebook') return offNotebook()
+    if (catMood === 'act') return
+    catReaction()
+  }, { onMove: () => stroke(), onHover: (on) => on && (quiet = unnoticed = 0) })
+  catSpot.node.dataset.tag = 'her cat (stroke it)'
+  spot('her', pieceCorners(her.idle), async () => {
+    strike('wave')
+    for (let k = 0; k < 3; k++) spark('heart', room.worldToLocal(her.idle.hinge.localToWorld(V(0.08, 0.95, 0.05))), { size: 0.06, life: 14 + k * 4 })
+    await stepped.wait(24)
+    if (pose === 'wave') strike('idle')
+  }, { onHover: (on) => Object.values(her).forEach((h) => hover(h.group, on, 0.02)) })
+  spot('window: another city', cornersOf(frame.mesh, frame.width, frame.height), () => {
+    viewing = (viewing + 1) % windowViews.length
+    sound.play('paper')
+    paintView()
+  })
+  spot(`suitcase: ${countries.length} countries`, pieceCorners(suitcase), async () => {
+    lidOpen = !lidOpen
+    sound.play(lidOpen ? 'creak' : 'snap')
+    if (lidOpen) slip.mesh.visible = true
+    await stepped.poses(lidOpen ? [-0.6, -1.3, -1.9, -2.05, -1.95] : [-1.4, -0.7, 0], (a) => (lidHinge.rotation.x = a))
+    if (lidOpen) await stepped.poses([0.03, 0.08, 0.12], (y) => (slip.mesh.position.y = suitcase.height - 0.08 + y))
+    else {
+      slip.mesh.visible = false
+      slip.mesh.position.y = suitcase.height - 0.08
+    }
+  }, { onHover: (on) => hover(suitcase.group, on, 0.02) })
+  function contact(label) {
+    return about.contact.find((c) => c.label === label)?.href || '#'
+  }
+  function contactValue(label) {
+    return about.contact.find((c) => c.label === label)?.value || ''
+  }
+
+  // ---- night and day ---------------------------------------------------------------------------------------------------
+  let dimmed = 0
+  function setNight(on) {
+    night = on
+    lampOn(on)
+    paintView()
+    const to = inside && on ? NIGHT : 0
+    const from = dimmed
+    dimmed = to
+    stepped.poses([0.35, 0.7, 1].map((t) => lerp(from, to, t)), (k) => lights?.dim(k))
+  }
+  lampOn(true)
+
+  boil(stepped, [her.idle, her.peace, her.wave, camera], () => onShelf() || inside)
 
   return {
-    card: () => renderAbout({ files, base }),
-    // one big flash as the camera flies in; the loop carries on inside
+    // one big flash as the camera flies in; then the lamp-lit room, its links along the bottom
     async open() {
-      inRoomNow = true
+      inside = true
+      quiet = unnoticed = 0
+      ui.links(true, about.contact, files.includes(about.cv) ? about.cv : null)
+      setNight(true)
       if (stepped.reduced) return
       setFlash(1)
       burst.mesh.visible = true
       bigFlash.classList.remove('is-on')
-      void bigFlash.offsetWidth // (so the fade plays again)
+      void bigFlash.offsetWidth
       bigFlash.classList.add('is-on')
       await stepped.poses([0.8, 0.55, 0.3, 0.12, 0], (k) => {
         setFlash(k)
@@ -613,29 +1241,62 @@ export async function build({ box, stepped, onShelf }) {
       })
     },
     async close() {
-      inRoomNow = false
+      ui.close(true)
+      ui.links(false)
+      if (viewing3d) {
+        const pol = viewing3d
+        viewing3d = null
+        pol.group.position.copy(pol.home)
+        pol.group.rotation.set(0, 0, pol.tilt)
+        pol.group.scale.setScalar(1)
+        pol.front.material.map = pol.small
+        pol.front.material.needsUpdate = true
+        pol.pin.visible = true
+        dimmer.visible = false
+        dimmer.material.opacity = 0
+      }
+      if (violinOut) await putViolinAway()
+      if (catMood === 'notebook' || catMood === 'act') {
+        catRun++
+        settleCat()
+      }
+      inside = false
+      busy = false
+      setNight(true)
     },
-    // motion off: the board as it is, nothing moving
+    // Escape (or the back button): put away whatever is out first
+    escape() {
+      if (ui.open) {
+        ui.close()
+        return true
+      }
+      return false
+    },
+    // the pointer: the cat's eyes follow it
+    pointer(fx, fy) {
+      if (!EYES[catNow]) return
+      const head = catHead().project(lens)
+      const dx = fx * 2 - 1 - head.x
+      const dy = 1 - fy * 2 - head.y
+      const l = Math.hypot(dx, dy) || 1
+      catLook = { x: (dx / l) * Math.min(1, l * 3), y: (dy / l) * Math.min(1, l * 3) }
+      placeEyes()
+      redraw()
+    },
+    // motion off: everything where it rests
     motion(off) {
       if (!off) return
-      setLight(false)
-      setFlash(0)
-      burst.mesh.visible = false
       for (const b of badges) b.visible = false
-      if (shot) shot.group.visible = shot.pin.visible = shot.thread.visible = false
-      shot = null
-      for (const p of clearing) {
-        p.group.visible = p.pin.visible = p.thread.visible = false
-        popHeart(p, 0)
-      }
-      clearing = []
-      for (const p of pinned) {
-        pinUp(p, p.spot)
-        stretch(p, 1)
-        popHeart(p, 1)
-      }
+      burst.mesh.visible = false
+      setFlash(0)
+      redLight.material.color.set('#4a1712')
+      if (taking) finishShot()
       strike('idle')
-      unroll(1)
+      catRun++
+      settleCat()
     },
   }
 }
+
+// the part of the world on the pinboard's map: the Middle East to Japan, down to Malaysia
+const MAP_AREA = { lon0: 38, lon1: 150, lat0: -8, lat1: 54 }

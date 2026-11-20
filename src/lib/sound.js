@@ -104,6 +104,73 @@ const SOUNDS = {
       node.stop(t + 0.65)
     }
   },
+  // her room: a cat's purr, low and rolling
+  purr(ctx, t) {
+    const frames = Math.round(ctx.sampleRate * 1.1)
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < frames; i++) {
+      const s = i / ctx.sampleRate
+      const throb = 0.5 + 0.5 * Math.sin(2 * Math.PI * 24 * s) // ~24 rumbles a second
+      const breath = Math.sin(Math.PI * Math.min(1, s / 1.1)) // in and out
+      data[i] = (Math.random() * 2 - 1) * throb * breath
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    const low = ctx.createBiquadFilter()
+    low.type = 'lowpass'
+    low.frequency.value = 260
+    const gain = ctx.createGain()
+    gain.gain.value = 0.32
+    source.connect(low).connect(gain).connect(ctx.destination)
+    source.start(t)
+  },
+  // her camera's shutter: a click and a whirr
+  shutter(ctx, t) {
+    noise(ctx, t, { length: 0.03, freq: 3500, q: 1.2, level: 0.32 })
+    noise(ctx, t + 0.06, { length: 0.02, freq: 2400, q: 1.2, level: 0.22 })
+    noise(ctx, t + 0.12, { length: 0.5, freq: 900, q: 2, level: 0.05, sweep: 1.6 })
+  },
+  // a violin: a little rising phrase, bowed
+  violin(ctx, t) {
+    ;[659, 784, 880, 988, 880].forEach((f, i) => {
+      const at = t + i * 0.32
+      const osc = ctx.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.value = f
+      const vib = ctx.createOscillator()
+      vib.frequency.value = 5.5
+      const depth = ctx.createGain()
+      depth.gain.value = f * 0.006
+      vib.connect(depth).connect(osc.frequency)
+      const low = ctx.createBiquadFilter()
+      low.type = 'lowpass'
+      low.frequency.value = 2200
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, at)
+      gain.gain.exponentialRampToValueAtTime(0.045, at + 0.08)
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.42)
+      osc.connect(low).connect(gain).connect(ctx.destination)
+      for (const node of [osc, vib]) {
+        node.start(at)
+        node.stop(at + 0.45)
+      }
+    })
+  },
+  // the violin humming to itself in its case
+  hum(ctx, t) {
+    tone(ctx, t, 440, { length: 0.7, level: 0.025, type: 'triangle' })
+    tone(ctx, t + 0.25, 554, { length: 0.6, level: 0.018, type: 'triangle' })
+  },
+  // paper: a sheet unfolding, a page turning
+  paper(ctx, t) {
+    noise(ctx, t, { length: 0.22, freq: 2600, q: 0.6, level: 0.12, sweep: 0.5 })
+  },
+  // a pushpin coming out of cork
+  pop(ctx, t) {
+    noise(ctx, t, { length: 0.02, freq: 1800, q: 2, level: 0.25 })
+    tone(ctx, t, 520, { length: 0.08, level: 0.05, type: 'triangle' })
+  },
   // a footstep in snow: a soft, muffled crunch
   step(ctx, t) {
     noise(ctx, t, { length: 0.14, freq: 600, q: 0.7, level: 0.2, sweep: 0.6 })
@@ -195,7 +262,8 @@ export const sound = {
       // no Web Audio here
     }
   },
-  // play one of: crinkle, tear, flick, sparkle, snap, jingle, bell, creak, step
+  // play one of: crinkle, tear, flick, sparkle, snap, jingle, bell, creak, step,
+  // purr, shutter, violin, hum, paper, pop
   // (nothing when sound is off)
   play(name) {
     if (!sound.on) return

@@ -249,22 +249,32 @@ export const photos = {
 
 export const about = {
   title: 'About',
-  // The places in the polaroids her camera takes in the About box, in order,
-  // with where each is (latitude, longitude) for the map on her corkboard.
-  // Add a place to add a polaroid (up to six fit on the board at once). Each
-  // gets a stand-in drawing until there is one of her own:
-  // drawings/place-<name>.png, spaces as dashes (place-abu-dhabi.png).
-  places: [
-    { name: 'dhaka', lat: 23.8, lon: 90.4 },
-    { name: 'abu dhabi', lat: 24.5, lon: 54.4 },
-    { name: 'shanghai', lat: 31.2, lon: 121.5 },
-    { name: 'zhangjiajie', lat: 29.1, lon: 110.5 },
+  // Her bio: written in the open notebook on her desk, and in the list view.
+  bio: [
+    "hi, i'm srotosshini! i study interactive media at nyu abu dhabi, minoring in design & engineering, and i'm spending this semester at nyu shanghai. i make games, creative code and things you can touch: cosy co-op heists, p5.js sketches that listen to your voice, resin and jewelry. i'm from dhaka, i take photos everywhere i go, and i'm looking for a game industry internship for summer 2027.",
   ],
-  bio: ['TODO: a short paragraph about you', 'TODO: what you are looking for (the internship)'],
-  cv: 'cv.pdf',
+  cv: 'cv.pdf', // the folder on her desk downloads it: public/cv.pdf
+  // Her links. On her desk: the laptop (GitHub), the business card holder
+  // (LinkedIn), the envelope (email).
   contact: [
-    { label: 'Email', value: 'TODO: your email address', href: '' },
-    { label: 'GitHub', value: 'TODO: your GitHub', href: '' },
+    { label: 'Email', value: 'mns9929@nyu.edu', href: 'mailto:mns9929@nyu.edu' },
+    { label: 'GitHub', value: 'github.com/Srotosshini', href: 'https://github.com/Srotosshini' },
+    { label: 'LinkedIn', value: 'linkedin.com/in/nahiyan-srotosshini', href: 'https://www.linkedin.com/in/nahiyan-srotosshini/' },
     { label: 'Itch.io', value: 'TODO: your itch.io page', href: '' },
   ],
+  // Her schools: the felt pennants on the wall, and the report card they pull
+  // down. `colours`: the pennant's felt, and its lettering.
+  education: [
+    { school: 'NYU Abu Dhabi', short: 'NYU Abu Dhabi', what: 'Interactive Media, minor in Design & Engineering', when: 'TODO: expected graduation year', colours: ['#57068c', '#ffffff'] },
+    { school: 'NYU Shanghai (Qiantan)', short: 'NYU Shanghai', what: 'study away', when: 'fall 2026', colours: ['#6b2a9e', '#f4c95d'] },
+  ],
+  // what comes out of the violin case: her performances (muted unless the sound is on)
+  music: [
+    { label: 'piano', video: 'about/piano.mp4' },
+    { label: 'violin', video: 'about/violin.mp4' },
+  ],
+  // her cat, asleep on the rug (a photo of it in public/about/cat.jpg, to draw it from)
+  cat: { name: "TODO: the cat's name" },
+  // the note taped to the wall the first time you come in
+  hello: 'poke around, everything does something',
 }

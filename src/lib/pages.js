@@ -133,6 +133,9 @@ export function renderAbout({ files = [], base = '', level = 2 } = {}) {
     .filter(Boolean)
   if (contact.length)
     out.push(`<h${level + 1} class="hand">${esc(L.contact)}</h${level + 1}><dl class="facts">${contact.join('')}</dl>`)
+  const schools = (about.education || [])
+    .map((e) => `<div><dt>${esc(e.school)}</dt><dd>${[e.what, e.when].map(text).filter(Boolean).join(' · ')}</dd></div>`)
+  if (schools.length) out.push(`<h${level + 1} class="hand">${esc(L.education || 'Education')}</h${level + 1}><dl class="facts">${schools.join('')}</dl>`)
   return out.join('\n')
 }
 

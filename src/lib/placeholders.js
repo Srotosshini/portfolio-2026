@@ -786,75 +786,7 @@ export function corrugated(vertical = false) {
 
 // ------------------------------------------------------------------ about
 
-// Her doodle: a little marker drawing of her, cute and simple, not a likeness.
-// Brown skin; long dark hair past her shoulders, with two long strands of
-// bangs framing her face; dressed in blue, her favourite colour; a peace sign
-// for the camera. One sprite used everywhere she appears (standing in her
-// room, and in every polaroid), so her own drawing, drawings/doodle.png,
-// replaces all of them at once. `pose`: 'peace' (the one in the photos), or
-// 'idle' (her hands together in front, between photos: drawings/doodle-idle.png).
-export const DOODLE = { skin: '#9b6343', hair: '#24170f', blue: '#3f72d6', blush: 'rgba(236, 120, 130, 0.5)' }
-export function doodle(seed = 1, pose = 'peace') {
-  const c = canvas(420, 780)
-  const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 6, wobble: 1.6 })
-  const { skin, hair, blue, blush } = DOODLE
-  // her hair, behind her: down past her shoulders
-  m.shape([[116, 206], [122, 128], [160, 80], [210, 66], [260, 80], [298, 128], [304, 206], [310, 300], [318, 400], [306, 474], [272, 486], [262, 430], [158, 430], [148, 486], [114, 474], [102, 400], [110, 300]], hair)
-  // neck, the arm at her side, her legs and shoes
-  m.rect(196, 266, 28, 44, skin)
-  if (pose === 'peace') {
-    m.shape([[136, 330], [154, 338], [140, 470], [122, 466]], skin)
-    m.blob(130, 478, 15, 15, skin)
-  }
-  for (const x of [178, 242]) {
-    m.rect(x - 12, 590, 24, 118, skin)
-    m.shape([[x - 20, 704], [x + 18, 704], [x + 24, 728], [x - 26, 728]], '#283a74')
-  }
-  // the dress, its sleeves and a white collar
-  m.shape([[158, 304], [262, 304], [306, 600], [114, 600]], blue)
-  m.line([[150, 520], [270, 520]], { width: 3, color: 'rgba(255, 255, 255, 0.55)' })
-  m.blob(150, 330, 28, 24, blue)
-  m.blob(270, 330, 28, 24, blue)
-  m.blob(194, 310, 18, 11, '#ffffff', { width: 4 })
-  m.blob(226, 310, 18, 11, '#ffffff', { width: 4 })
-  if (pose === 'peace') {
-    // the other arm, up, making a peace sign
-    m.shape([[262, 320], [286, 336], [334, 254], [316, 244]], skin)
-    m.blob(328, 238, 17, 17, skin)
-    m.shape([[318, 228], [324, 226], [314, 186], [306, 190]], skin, { width: 4 })
-    m.shape([[332, 226], [338, 228], [348, 190], [340, 186]], skin, { width: 4 })
-  } else {
-    // both arms down, her hands together in front of her
-    m.shape([[138, 326], [158, 336], [196, 452], [180, 462]], skin)
-    m.shape([[282, 326], [262, 336], [224, 452], [240, 462]], skin)
-    m.blob(210, 462, 30, 18, skin)
-  }
-  // her face
-  m.blob(210, 194, 84, 90, skin)
-  // the hair on top, parted in the middle
-  m.shape([[124, 206], [126, 144], [158, 102], [210, 88], [262, 102], [294, 144], [296, 206], [278, 154], [244, 128], [214, 120], [206, 120], [176, 128], [142, 154]], hair)
-  // two long strands of bangs, framing her face down past her chin
-  m.shape([[178, 124], [146, 156], [130, 214], [130, 286], [140, 334], [156, 326], [152, 280], [154, 214], [170, 160], [190, 130]], hair)
-  m.shape([[242, 124], [274, 156], [290, 214], [290, 286], [280, 334], [264, 326], [268, 280], [266, 214], [250, 160], [230, 130]], hair)
-  // eyes, a smile, rosy cheeks
-  for (const x of [182, 238]) {
-    m.blob(x, 200, 8, 10, '#1b1420', { width: 3 })
-    ctx.fillStyle = '#ffffff'
-    ctx.beginPath()
-    ctx.arc(x + 3, 196, 2.6, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  m.line([[196, 236], [210, 246], [224, 236]], { width: 4, color: '#5a2a28' })
-  ctx.fillStyle = blush
-  for (const x of [166, 254]) {
-    ctx.beginPath()
-    ctx.ellipse(x, 228, 14, 8, 0, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  fibres(ctx)
-  return c
-}
+// (her doodle is in doodle.js; the rest of her room in room-things.js)
 
 // ------------------------------------------------------------------ photography
 
