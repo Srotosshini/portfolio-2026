@@ -194,6 +194,77 @@ export function snowDrift(width = 900, seed = 1) {
   return c
 }
 
+// Snow lying on the street, for it to settle and melt: white all over, its
+// alpha a field of soft blotches. Cut off at a level that falls (alphaTest),
+// it leaves patches of snow that spread and join until the street is covered.
+export function snowCover(w = 1000, h = 120, seed = 1) {
+  const c = canvas(w, h)
+  const ctx = c.getContext('2d')
+  const r = rng(seed * 97 + w)
+  const field = new Float32Array(w * h)
+  for (const [cell, weight] of [[44, 0.55], [20, 0.3], [9, 0.15]]) {
+    const gw = Math.ceil(w / cell) + 2
+    const gh = Math.ceil(h / cell) + 2
+    const grid = Array.from({ length: gw * gh }, () => r())
+    for (let y = 0; y < h; y++) {
+      const gy = y / cell
+      const y0 = Math.floor(gy)
+      const fy = gy - y0
+      const sy = fy * fy * (3 - 2 * fy)
+      for (let x = 0; x < w; x++) {
+        const gx = x / cell
+        const x0 = Math.floor(gx)
+        const fx = gx - x0
+        const sx = fx * fx * (3 - 2 * fx)
+        const a = grid[y0 * gw + x0]
+        const b = grid[y0 * gw + x0 + 1]
+        const cc = grid[(y0 + 1) * gw + x0]
+        const d = grid[(y0 + 1) * gw + x0 + 1]
+        field[y * w + x] += weight * (a + (b - a) * sx + (cc - a + (a - b + d - cc) * sx) * sy)
+      }
+    }
+  }
+  let lo = Infinity
+  let hi = -Infinity
+  for (const v of field) {
+    lo = Math.min(lo, v)
+    hi = Math.max(hi, v)
+  }
+  const img = ctx.createImageData(w, h)
+  for (let i = 0; i < field.length; i++) {
+    const v = (field[i] - lo) / (hi - lo || 1)
+    const shade = 236 + v * 14 // the thin snow a little bluer than the deep
+    img.data[i * 4] = shade - 6
+    img.data[i * 4 + 1] = shade - 2
+    img.data[i * 4 + 2] = 255
+    img.data[i * 4 + 3] = Math.round(40 + v * 215) // (never nearly clear: the colour would lose its precision)
+  }
+  ctx.putImageData(img, 0, 0)
+  return c
+}
+
+// A sparkle, for the string lights as they come on: a four-pointed star in a soft glow.
+export function sparkle() {
+  const c = canvas(96, 96)
+  const ctx = c.getContext('2d')
+  const g = ctx.createRadialGradient(48, 48, 0, 48, 48, 46)
+  g.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+  g.addColorStop(0.28, 'rgba(255, 244, 205, 0.32)')
+  g.addColorStop(1, 'rgba(255, 238, 190, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 96, 96)
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4
+    const rad = i % 2 ? 6 : 45
+    ctx.lineTo(48 + Math.cos(a) * rad, 48 + Math.sin(a) * rad)
+  }
+  ctx.closePath()
+  ctx.fill()
+  return c
+}
+
 // Cut-paper snowflakes, three kinds.
 export function flake(kind = 0) {
   const c = canvas(128, 128)

@@ -223,6 +223,19 @@ export const projects = [
   },
 ]
 
+// The plush toys in the claw machine on the games box: which character each
+// one is and which game it comes from (while the claw holds it up, the
+// machine's little screen plays that game's clip and shows its title).
+// A drawing of her own goes in drawings/plush-<id>.png.
+export const plushies = [
+  { id: 'raccoon', game: 'snikisnak' },
+  { id: 'chameleon', game: 'snikisnak' },
+  { id: 'hamster', game: 'snikisnak' },
+  { id: 'blob', game: 'patchwork' },
+  { id: 'duck', game: 'duckie' },
+  { id: 'kitten', game: 'red-dot-rescue' },
+]
+
 // Photography. There is no list to keep: every image in public/photos/ goes
 // onto the reel, in file-name order (01.jpg, 02.jpg, …). If a smaller copy
 // with the same name is in public/photos/thumbs/, the reel uses that and only
@@ -236,6 +249,11 @@ export const photos = {
 
 export const about = {
   title: 'About',
+  // The places in the polaroids her camera takes in the About box, in order.
+  // Add a place to add a polaroid (up to six fit on the corkboard at once).
+  // Each gets a stand-in drawing until there is one of her own:
+  // drawings/place-<name>.png, spaces as dashes (place-abu-dhabi.png).
+  places: ['dhaka', 'abu dhabi', 'shanghai', 'zhangjiajie'],
   bio: ['TODO: a short paragraph about you', 'TODO: what you are looking for (the internship)'],
   cv: 'cv.pdf',
   contact: [

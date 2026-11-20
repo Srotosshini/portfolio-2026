@@ -5,6 +5,11 @@
 // and it leans out, its lights brighten and its door opens a crack. Click it
 // and its door swings open, its front folds down like a dollhouse's, and the
 // camera steps inside, where everything is about that one project.
+// On the shelf it plays a loop: the snow lying on the roofs and the street
+// melts away and the lights go out; then it starts to snow, the snow piles up
+// again, and the string lights sparkle on one by one. Clicking the box sends
+// the falling snow and the sparkles swirling up and away past the camera as
+// it comes in; inside, a gentler snow starts to fall.
 import * as THREE from 'three'
 import { stalls, words } from '../data/design.js'
 import { site } from '../data/projects.js'
@@ -15,6 +20,7 @@ import { art, has, loadImage, turn, base } from '../lib/assets.js'
 import { sound } from '../lib/sound.js'
 import { isTodo } from '../lib/pages.js'
 import { makeMarketUI, urlFor } from '../lib/market-ui.js'
+import { loopClock, passed, smooth } from '../lib/loop.js'
 
 const W = 1.0 // a stall's width
 const WALL = 0.58 // its walls, up to the eaves
@@ -27,9 +33,17 @@ const DOOR = { x: -0.24, w: 0.25, h: 0.42 }
 const WIN = { x: 0.2, y: 0.2, w: 0.32, h: 0.22 }
 const NIGHT = 0.42 // how far the lights go down in the market
 const INSIDE = 0.16 // and inside a stall
+// the loop on the shelf (seconds into it)
+const LOOP = 11
+const MELT = 1.8 // the lying snow has melted away by now
+const DARK = [1.3, 1.9] // the string lights going out, the last bulb first
+const BARE = 2.8 // it starts to snow again
+const SETTLE = [3.6, 6.8] // the snow piling up on the roofs and the street
+const LIGHTS = [6.8, 8.8] // the string lights coming on, one by one
+const SWIRL = 13 // ticks the snow takes to swirl away when the box is clicked
 const V3 = THREE.Vector3
 
-export async function build({ box, stepped, overlay, redraw, goTo, lights, camera }) {
+export async function build({ box, stepped, overlay, redraw, goTo, lights, camera, onShelf }) {
   const { inner } = box
   const room = new THREE.Group()
   room.position.y = inner.floor
@@ -102,14 +116,25 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   street.position.set(0, 0.003, FRONT / 2)
   street.receiveShadow = true
   room.add(street)
+  const drifts = [] // snow that lies, and melts: the drifts, the street's cover, the roofs' (below)
   const drift = (width, height, x, z, seed) => {
     const d = makeFlat(once(drawn.snowDrift(Math.round(width * 360), seed), { edge: 0 }), { width })
     d.mesh.scale.y = height / d.height
     d.mesh.position.set(x, height / 2, z)
     d.mesh.castShadow = false
     room.add(d.mesh)
+    drifts.push({ mesh: d.mesh, height, scale: d.mesh.scale.y })
     return d
   }
+  // the snow lying on the street: patches that spread until it is covered
+  const cover = new THREE.Mesh(
+    new THREE.PlaneGeometry(inner.w, -FRONT),
+    new THREE.MeshLambertMaterial({ map: texture(drawn.snowCover(Math.round(inner.w * 180), Math.round(-FRONT * 180))), alphaTest: 0.02 }),
+  )
+  cover.rotation.x = -Math.PI / 2
+  cover.position.set(0, 0.006, FRONT / 2)
+  cover.receiveShadow = true
+  room.add(cover)
   drift(inner.w, 0.1, 0, -0.03, 1) // along the front of the street
   for (let i = 0; i < n; i++) {
     drift(0.34, 0.05, stallX(i) - 0.3, FRONT + 0.03, 10 + i)
@@ -141,6 +166,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
     return mesh
   }
 
+  const roofSnow = []
   async function makeStall(s, i) {
     await turn()
     const group = new THREE.Group() // where it stands
@@ -192,6 +218,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
       cap.mesh.position.set(0, 0.025, (DEPTH + 0.13) / 2 + 0.004)
       cap.mesh.castShadow = false
       pitch.add(cap.mesh)
+      roofSnow.push({ slab: snow, cap: cap.mesh })
     }
 
     // the front: a hinged piece with the door, the lit window, the sign and the decorations
@@ -418,11 +445,14 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   })
   room.add(bulbs)
   const bulbState = bulbAt.map(() => 0) // ticks left dimmed
+  const bulbLit = bulbAt.map(() => true) // switched on (the loop on the shelf switches them off and on)
+  const bulbFlash = bulbAt.map(() => 0) // ticks left at full brightness, just switched on
   const bulbOwner = bulbAt.map((p) => market.findIndex((m) => Math.abs(p.x - m.group.position.x) < spacing / 2))
   function paintBulbs() {
     bulbAt.forEach((_, k) => {
       const hot = hovered && bulbOwner[k] === hovered.i
-      bulbs.setColorAt(k, hot ? BULB_BRIGHT : bulbState[k] > 0 ? BULB_OFF : BULB_ON[k % 2])
+      const color = !bulbLit[k] ? BULB_OFF : hot || bulbFlash[k] > 0 ? BULB_BRIGHT : bulbState[k] > 0 ? BULB_OFF : BULB_ON[k % 2]
+      bulbs.setColorAt(k, color)
     })
     bulbs.instanceColor.needsUpdate = true
   }
@@ -464,24 +494,96 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
       phase: rand() * 6,
       spin: (rand() - 0.5) * 0.2,
       turn: rand() * 6,
+      on: true, // in the air (off: waiting to fall, or melted)
+      size: 1,
+      wait: 0, // ticks before it starts to fall from the top
+      melting: -1, // ticks before it melts away in the air
+      share: rand(), // it falls while this is under the snow's density
+      swirl: null,
     }))
     return { mesh, flakes }
   })
+  const allFlakes = snowfall.flatMap(({ flakes }) => flakes)
+  let snowing = true // flakes that reach the ground start again at the top
+  let density = 1 // the share of the flakes that fall (inside the market, a gentler snow)
+  let pace = 1 // and how fast
   const flakeMatrix = new THREE.Matrix4()
   const flakeQ = new THREE.Quaternion()
   const Z = new V3(0, 0, 1)
-  const one = new V3(1, 1, 1)
+  const flakeScale = new V3()
   const flakePos = new V3()
   function placeFlakes() {
     for (const { mesh, flakes } of snowfall) {
       flakes.forEach((f, k) => {
         flakeQ.setFromAxisAngle(Z, f.turn)
-        mesh.setMatrixAt(k, flakeMatrix.compose(flakePos.set(f.x, f.y, f.z), flakeQ, one))
+        flakeScale.setScalar(f.on ? f.size : 0)
+        mesh.setMatrixAt(k, flakeMatrix.compose(flakePos.set(f.x, f.y, f.z), flakeQ, flakeScale))
       })
       mesh.instanceMatrix.needsUpdate = true
     }
   }
   placeFlakes()
+  const dropFlake = (f) => {
+    f.on = true
+    f.size = 1
+    f.melting = -1
+    f.y = inner.h - 0.03 - rand() * 0.08 // (from just under the box's lid: higher would poke out over it)
+    f.x = (rand() - 0.5) * (inner.w - 0.06)
+  }
+
+  // sparkles, for the string lights coming on
+  const SPARKS = 30
+  const SPARK_SIZE = [0.45, 1.15, 0.9, 0.62, 0.35] // one tick each
+  const sparkMesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(0.075, 0.075),
+    new THREE.MeshBasicMaterial({ map: texture(drawn.sparkle()), color: '#fff1c8', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    SPARKS,
+  )
+  sparkMesh.frustumCulled = false
+  room.add(sparkMesh)
+  const sparks = Array.from({ length: SPARKS }, () => ({ on: false, x: 0, y: 0, z: 0, age: 0, turn: 0, swirl: null }))
+  function spark(at) {
+    const s = sparks.find((s) => !s.on)
+    if (!s) return
+    Object.assign(s, { on: true, x: at.x + (rand() - 0.5) * 0.03, y: at.y + (rand() - 0.5) * 0.03, z: at.z + 0.014, age: 0, turn: rand() * 1.5, swirl: null })
+  }
+  function placeSparks() {
+    sparks.forEach((s, k) => {
+      flakeQ.setFromAxisAngle(Z, s.turn)
+      flakeScale.setScalar(!s.on ? 0 : s.swirl ? 0.85 : SPARK_SIZE[Math.min(s.age, SPARK_SIZE.length - 1)])
+      sparkMesh.setMatrixAt(k, flakeMatrix.compose(flakePos.set(s.x, s.y, s.z), flakeQ, flakeScale))
+    })
+    sparkMesh.instanceMatrix.needsUpdate = true
+  }
+  placeSparks()
+
+  // Clicked: everything in the air swirls up round the middle of the street
+  // and out toward the camera, clearing the view as it comes in.
+  function swirlAway() {
+    const cy = inner.h * 0.5
+    for (const p of [...allFlakes, ...sparks]) {
+      if (!p.on) continue
+      const dx = p.x
+      const dy = (p.y - cy) / 0.6
+      p.swirl = { k: 0, a: Math.atan2(dy, dx), r: Math.hypot(dx, dy) + 0.05, y: 0, cy, spin: 0.26 + rand() * 0.12 }
+    }
+  }
+  // one tick of the swirl; true when it has gone
+  function swirlStep(p) {
+    const s = p.swirl
+    s.k++
+    s.a += s.spin
+    s.r = s.r * 1.16 + 0.02
+    s.y += 0.03 + s.k * 0.014
+    p.x = Math.cos(s.a) * s.r
+    p.y = s.cy + s.y + Math.sin(s.a) * s.r * 0.6
+    p.z += 0.05 + s.k * 0.03
+    p.turn += 0.4
+    if (s.k < SWIRL) return false
+    p.swirl = null
+    p.on = false
+    return true
+  }
   const showSnow = (on) => snowfall.forEach(({ mesh }) => (mesh.visible = on))
   // the pointer, as a ray through the room, so falling snow can shy away from it
   const ray = { on: false, origin: new V3(), dir: new V3(), at: 0 }
@@ -976,15 +1078,30 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   }
 
   // ---- the stop-motion clock -----------------------------------------------------------------
-  const onShelf = () => document.body.dataset.place === 'shelf'
-  const live = () => (mode === 'street' || mode === 'entering' || (mode === 'closed' && onShelf()))
-  // snow falls, sways, and shies away from the pointer
+  const live = () => mode === 'street' || mode === 'entering' || (mode === 'closed' && onShelf())
+  // snow falls, sways, and shies away from the pointer (and melts, and swirls away)
   stepped.every(1, (frame) => {
     if (!live() || !snowfall[0].mesh.visible) return false
     const pointing = ray.on && performance.now() - ray.at < 1500
     for (const { flakes } of snowfall) {
       for (const f of flakes) {
-        f.y -= f.fall
+        if (f.swirl) {
+          swirlStep(f)
+          continue
+        }
+        if (!f.on) {
+          if (snowing && f.share <= density && --f.wait <= 0) dropFlake(f)
+          continue
+        }
+        if (f.melting >= 0 && --f.melting < 0) {
+          f.size -= 0.32
+          f.melting = 0
+          if (f.size <= 0.05) {
+            f.on = false
+            continue
+          }
+        }
+        f.y -= f.fall * pace
         f.x += Math.sin(frame * 0.16 + f.phase) * 0.004
         f.turn += f.spin
         if (pointing) {
@@ -998,14 +1115,33 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
           }
         }
         if (f.y < 0.01) {
-          f.y = inner.h + rand() * 0.1
-          f.x = (rand() - 0.5) * (inner.w - 0.06)
+          if (snowing && f.share <= density) dropFlake(f)
+          else f.on = false
         }
         f.x = THREE.MathUtils.clamp(f.x, -inner.w / 2 + 0.02, inner.w / 2 - 0.02)
       }
     }
     placeFlakes()
     return 'looks'
+  })
+  // sparkles flare and fade (or swirl away); a bulb just switched on burns bright for a moment
+  stepped.every(1, () => {
+    if (!live()) return false
+    let changed = false
+    for (const s of sparks) {
+      if (!s.on) continue
+      changed = true
+      if (s.swirl) swirlStep(s)
+      else if (++s.age >= SPARK_SIZE.length) s.on = false
+      else s.turn += 0.25
+    }
+    if (changed) placeSparks()
+    let flashed = false
+    bulbFlash.forEach((left, k) => {
+      if (left > 0 && --bulbFlash[k] === 0) flashed = true
+    })
+    if (flashed) paintBulbs()
+    return changed || flashed ? 'looks' : false
   })
   // the string lights blink, a bulb or two at a time
   stepped.every(1, () => {
@@ -1063,6 +1199,75 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   })
   boil(stepped, boiling, () => mode !== 'closed' || onShelf())
 
+  // ---- on the shelf: the snow melts, falls, settles; the lights sparkle on --------------------
+  let coverLevel = 1 // how much snow lies on the roofs and the street, 0 to 1
+  function setCover(c) {
+    if (c === coverLevel) return false
+    coverLevel = c
+    const on = c > 0.01
+    const k = Math.max(0.05, c)
+    for (const { slab, cap } of roofSnow) {
+      slab.visible = cap.visible = on
+      slab.scale.y = cap.scale.y = k
+      slab.position.y = 0.0125 + 0.0175 * k // it piles up from the roof
+    }
+    for (const d of drifts) {
+      d.mesh.visible = on
+      d.mesh.scale.y = d.scale * k
+      d.mesh.position.y = (d.height * k) / 2
+    }
+    cover.visible = on
+    cover.material.alphaTest = 1 - 0.98 * c // (never 0: switching it off would compile it again)
+    return true
+  }
+  // in steps, the way a stop-motion animator swaps in a bigger pile of paper snow
+  const steps = (k) => Math.round(smooth(k) * 6) / 6
+  const coverAt = (t) => (t < MELT ? 1 - steps(t / MELT) : t < SETTLE[0] ? 0 : t < SETTLE[1] ? steps((t - SETTLE[0]) / (SETTLE[1] - SETTLE[0])) : 1)
+  const last = Math.max(1, bulbAt.length - 1)
+  const litAt = (k, t) =>
+    t < DARK[0] ? true : t < DARK[1] ? t < DARK[0] + (1 - k / last) * (DARK[1] - DARK[0]) : t < LIGHTS[0] ? false : t < LIGHTS[1] ? t >= LIGHTS[0] + (k / last) * (LIGHTS[1] - LIGHTS[0]) : true
+  function switchBulb(k, on) {
+    if (bulbLit[k] === on) return false
+    bulbLit[k] = on
+    if (on) {
+      bulbFlash[k] = 2
+      spark(bulbAt[k])
+    }
+    return true
+  }
+  const clock = loopClock(stepped, {
+    box,
+    group: room,
+    period: LOOP,
+    active: () => mode === 'closed' && onShelf(),
+    tick(t, prev) {
+      // the snow stops: what is still in the air melts away as it falls
+      if (passed(prev, t, 0)) {
+        snowing = false
+        for (const f of allFlakes) if (f.on) f.melting = 1 + Math.floor(rand() * 14)
+      }
+      // and then it starts again, a few flakes at first
+      if (passed(prev, t, BARE)) {
+        snowing = true
+        for (const f of allFlakes) if (!f.on) f.wait = 1 + Math.floor(rand() * 34) // (over three seconds: a few flakes, then more)
+      }
+      let changed = setCover(coverAt(t))
+      let switched = false
+      for (let k = 0; k < bulbAt.length; k++) if (switchBulb(k, litAt(k, t))) switched = true
+      if (switched) paintBulbs()
+      // with the lights all on, now and then one of them glints
+      if ((t < DARK[0] || t >= LIGHTS[1]) && rand() < 0.25) spark(bulbAt[Math.floor(rand() * bulbAt.length)])
+      return changed || switched ? 'looks' : false
+    },
+  })
+  // the whole scene at its fullest: snow lying everywhere, every light on
+  function fullest() {
+    setCover(1)
+    let switched = false
+    for (let k = 0; k < bulbAt.length; k++) if (switchBulb(k, true)) switched = true
+    if (switched) paintBulbs()
+  }
+
   const bySlug = (slug) => market.find((m) => m.s.slug === slug)
   const dim = (to) => {
     const from = dim.level ?? 0
@@ -1075,19 +1280,41 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
   showSnow(!stepped.reduced)
 
   return {
+    // Clicked: the snow and the sparkles swirl away past the camera, the street
+    // and the roofs fill with snow and every light comes on; once the view is
+    // clear, a gentler snow starts to fall inside the market.
     async open() {
       mode = 'street'
       sound.ambient('wind', true)
+      snowing = false
+      swirlAway()
+      const from = coverLevel
+      stepped.poses([0.35, 0.7, 1].map((f) => from + (1 - from) * f), setCover)
+      const off = bulbAt.map((_, k) => k).filter((k) => !bulbLit[k])
+      stepped.poses([0.25, 0.5, 0.75, 1], (f) => {
+        for (const k of off.splice(0, Math.ceil(off.length * f))) switchBulb(k, true)
+        paintBulbs()
+      })
+      await Promise.all([dim(NIGHT), stepped.wait(SWIRL)])
+      density = 0.55
+      pace = 0.75
+      snowing = true
+      for (const f of allFlakes) if (!f.on) f.wait = 1 + Math.floor(rand() * 48)
       showSnow(!stepped.reduced)
-      await dim(NIGHT)
       overlay.update()
     },
+    // back on the shelf: the full snowfall again, and the loop from the start
     async close() {
       mode = 'closed'
       ui.closeAll()
       sound.ambient('wind', false)
       for (const stall of market) rest(stall)
+      density = pace = 1
+      snowing = true
+      for (const f of allFlakes) if (!f.on) f.wait = 1 + Math.floor(rand() * 30)
+      fullest()
       paintBulbs()
+      clock.restart()
       await dim(0)
     },
 
@@ -1178,13 +1405,16 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights, camer
       ray.on = Math.abs(ray.dir.z) > 1e-3
       ray.at = performance.now()
     },
-    // motion switched off: no falling snow (it lies on the roofs), no blinking
+    // motion switched off: no falling snow (it lies on the roofs), every light on, no blinking
     motion(off) {
       showSnow(!off && mode !== 'inside' && mode !== 'leaving')
       if (off) {
         bulbState.fill(0)
+        for (const s of sparks) s.on = false
+        placeSparks()
+        fullest()
         paintBulbs()
-      }
+      } else clock.restart()
     },
   }
 }

@@ -126,6 +126,29 @@ export async function buildShelf({ stepped }) {
   const boxes = new Map()
   const boiling = [] // drawings that boil while the shelf is on screen
 
+  // The box under the pointer brightens a little, as if someone held a lamp
+  // up to it. One warm light, moved to whichever box it is. (It is always in
+  // the scene, at nothing when unused: adding a light later would make every
+  // material compile again.)
+  const torch = new THREE.PointLight(new THREE.Color(1, 0.86, 0.66), 0, 1, 2)
+  group.add(torch)
+  let torchAt = null
+  let torchRun = 0
+  const TORCH = 2
+  function shine(entry, on) {
+    if (!on && torchAt !== entry) return
+    const mine = ++torchRun
+    if (on) {
+      torchAt = entry
+      const { group: g, w, h, d } = entry
+      torch.position.set(g.position.x, g.position.y + h * 0.66, -d * 0.18)
+      torch.distance = Math.max(w, h) * 1.25
+    }
+    const from = torch.intensity / TORCH
+    const to = on ? 1 : 0
+    stepped.poses([0.4, 0.75, 1].map((t) => from + (to - from) * t), (k) => mine === torchRun && (torch.intensity = k * TORCH))
+  }
+
   // ---- the six boxes -----------------------------------------------------
   boxData.forEach((data, index) => {
     const [w, h, d] = SIZES[data.id]
@@ -233,8 +256,9 @@ export async function buildShelf({ stepped }) {
     }
     let hovered = false
 
-    boxes.set(data.id, {
+    const entry = {
       id: data.id, data, group: box, body, tapes, ground, front, w, h, d,
+      hot: false, // the pointer (or keyboard focus) is on it: its loop runs a little faster
       // where things stand inside: floor height, back wall, usable width and height
       inner: { w: w - 2 * T, h: h - 2 * T, floor: T, back: -d + T },
       // corners of the opening in world space, for the hotspot button
@@ -260,6 +284,8 @@ export async function buildShelf({ stepped }) {
       hover(on) {
         if (on === hovered) return
         hovered = on
+        entry.hot = on && data.built
+        if (data.built) shine(entry, on)
         if (!data.built) {
           if (on) act([0.05, -0.04, 0.025, -0.012, 0], (tilt) => (body.rotation.z = tilt))
         } else if (on) {
@@ -276,10 +302,13 @@ export async function buildShelf({ stepped }) {
       rest() {
         latest++
         hovered = false
+        entry.hot = false
+        shine(entry, false)
         body.position.set(0, 0, 0)
         body.rotation.set(0, 0, 0)
       },
-    })
+    }
+    boxes.set(data.id, entry)
   })
 
   // ---- loose things on the shelf ------------------------------------------

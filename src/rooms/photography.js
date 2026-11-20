@@ -3,10 +3,13 @@
 // paper photo corners. Drag the film along (or scroll, use the arrow keys, or
 // click a reel). Click a photo and it goes into the projector as a slide: the
 // lights go down and it is thrown big onto the paper screen on the back wall.
+// Red velvet curtains hang across the front. On the shelf they draw closed,
+// the slide changes behind them, and they sweep open on a different photo
+// each time; clicking the box swings them right open as the camera comes in.
 import * as THREE from 'three'
 import { site } from '../data/projects.js'
-import { PALETTE as P, makePiece, makeHinged, makeFlat, texture, paperMaterial, canvas, lightDot, stack, popUp, foldFlat, boil, rng } from '../lib/paper.js'
-import { createScraps } from '../lib/scraps.js'
+import { PALETTE as P, makePiece, makeHinged, makeFlat, texture, paperMaterial, canvas, lightDot, boil, rng } from '../lib/paper.js'
+import { loopClock, passed, smooth } from '../lib/loop.js'
 import * as sketch from '../lib/placeholders.js'
 import { art, scan, files, base, loadImage, turn } from '../lib/assets.js'
 import { photoList, renderPhoto } from '../lib/pages.js'
@@ -33,6 +36,16 @@ const SLOT = { x: 0.35, y: 0.98 }
 const SCREEN_W = 2.3
 const MOTES = 36 // dust in the beam
 
+// ---- the curtains, and their loop on the shelf (seconds into it)
+const PLEATS = 12
+const CURTAIN_Z = -0.12 // how far in from the opening they hang
+const GATHERED = 0.3 // how wide each one is, drawn back to its side
+const LOOP = 9.5
+const SHUT = 1.3 // drawn across by now,
+const SWAP = 1.45 // the slide changes behind them,
+const PART = 2.5 // they start to sweep open,
+const OPENED = 4 // and are open again (until the loop comes round)
+
 // light, not artwork: the darkening toward the edges of a projected picture
 function lightFalloff() {
   const c = canvas(256, 256)
@@ -45,7 +58,7 @@ function lightFalloff() {
   return c
 }
 
-export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
+export async function build({ box, stepped, overlay, redraw, goTo, lights, onShelf }) {
   const { inner } = box
   const room = new THREE.Group()
   room.position.y = inner.floor
@@ -68,12 +81,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     art('drawings/photo-corners', (seed) => sketch.photoCorners(seed), { edge: 0 }),
     art('drawings/crank', (seed) => sketch.crank(seed)),
   ])
-
-  const scraps = createScraps(stepped, room, {
-    count: 30,
-    colors: [P.paper, P.paper, P.tape, P.periwinkle, '#d9a7b2'],
-    bounds: { x: inner.w / 2 - 0.15, back: inner.back + 0.15, front: -0.25 },
-  })
 
   // where a point on something in the room is, in the room's own coordinates
   const inRoom = (object, x, y, z) => {
@@ -176,7 +183,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     print.picture.material.color.set(0xffffff)
     print.picture.material.needsUpdate = true
     shape(print, aspect)
-    if (projected === print) throwPicture(print)
+    if (onScreen === print) throwPicture(print, { big: !!projected })
     redraw()
   }
 
@@ -187,8 +194,10 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   let pending = 0 // drag distance not yet applied (the film only moves on a tick)
   let dragging = false
   let held = false // a scripted wind is moving the film
-  let standing = false
-  let projected = null // the print whose photo is in the projector
+  let standing = false // inside the room, and it can be played with
+  let mode = 'shelf' // 'shelf': playing its loop on the shelf; 'room': the camera is inside
+  let projected = null // the print whose photo is in the projector, opened as a page
+  let onScreen = null // the print whose photo is up on the screen (on the shelf too)
 
   const wound = REEL_X - REEL_R + PRINT.w / 2 - 0.04 // past this a print has gone onto a reel
   const reach = REEL_X - REEL_R - PRINT.w * 0.3 // inside this a print can be clicked
@@ -305,7 +314,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     screenMap.repeat.y = Math.min(1, s)
     screenMap.offset.y = 1 - Math.min(1, s)
   }
-  unroll(0)
+  unroll(1)
 
   // ---- the projected picture, the beam, and the dust in it ------------------------
   const pictureArea = { w: SCREEN_W * 0.84, h: screenH * 0.78, y: screenTop - screenH * 0.53 }
@@ -390,7 +399,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
 
   // An old projector is never quite steady: the picture flickers, the dust drifts up through the beam.
   stepped.every(2, () => {
-    if (!projected || lampLevel < 1) return false
+    if (!onScreen || lampLevel < 1 || !(mode === 'room' || onShelf())) return false
     for (const d of drift) {
       d.a = clamp(d.a + (rand() - 0.5) * 0.05, -0.5, 0.5)
       d.b += (rand() - 0.5) * 0.04 + 0.008
@@ -408,9 +417,9 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   })
 
   // Put a print's photo up on the screen: the small copy straight away, the
-  // full-size one as soon as it arrives.
+  // full-size one as soon as it arrives (not for the shelf: too small to tell).
   const fullSize = new Map()
-  function throwPicture(print) {
+  function throwPicture(print, { big = true } = {}) {
     glow.map = print.map
     glow.needsUpdate = true
     const w = Math.min(pictureArea.w, pictureArea.h * print.aspect)
@@ -418,7 +427,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     falloff.scale.copy(thrown.scale)
     aimBeam()
     const { photo } = print
-    if (!photo.real || photo.thumb === photo.src) return
+    if (!big || !photo.real || photo.thumb === photo.src) return
     let full = fullSize.get(photo.src)
     if (!full) {
       full = loadImage(photo.src).then(texture)
@@ -431,7 +440,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     }
     full
       .then((map) => {
-        if (projected !== print) return
+        if (onScreen !== print) return
         glow.map = map
         glow.needsUpdate = true
         redraw()
@@ -507,30 +516,122 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
   }
   overlay.addSpot({ group: box.id, label: site.ui.windOn, corners: reelCorners(sides[1]), onClick: () => nudge(1) })
 
-  // ---- stand up, fold flat, boil -------------------------------------------------------
-  const ordered = stack([rig, projector])
-  boil(stepped, [...sides.flatMap((side) => [side.reel, side.stand]), crank, corners, projector], () => standing && !projected)
+  boil(stepped, [...sides.flatMap((side) => [side.reel, side.stand]), crank, corners, projector], () => (mode === 'room' || onShelf()) && !projected)
   const byId = (id) => prints.find((print) => print.photo.id === id)
 
-  return {
-    async open() {
-      // it arrives a little wound on and settles back, so the reels are seen to turn
-      const first = Math.max(0, Math.min(2, count - 1))
-      goal = first
-      scroll = clamp((first + 1.6) * FRAME, 0, scrollMax)
-      layout()
-      unroll(0)
-      await popUp(stepped, ordered, { onUp: (piece) => scraps.burst(piece.group.position, 5) })
-      standing = true
-      if (stepped.reduced) jump(goal * FRAME)
-      await stepped.poses([0.2, 0.45, 0.7, 0.92, 1.04, 1], unroll)
+  // ---- the curtains: red velvet, pleated like a paper fan, across the front -------------
+  const [curtainArt, valanceArt] = await Promise.all([
+    art('drawings/curtain', (seed) => sketch.curtain(seed, PLEATS), { edge: 0, trim: false, tracings: 1 }),
+    art('drawings/curtain-valance', (seed) => sketch.valance(seed), { edge: 0, tracings: 1 }),
+  ])
+  const half = inner.w / 2
+  const across = half + 0.05 // drawn across, each reaches just past the middle
+  const laid = across / Math.cos(0.36) // a curtain laid out flat (drawn across it still hangs in folds)
+  const pleatW = laid / PLEATS
+  const curtainH = inner.h - 0.02
+  // One zig-zag of flat strips, shared by both curtains (the right one is its mirror image).
+  const folds = new THREE.BufferGeometry()
+  const foldAt = new Float32Array(PLEATS * 12)
+  const foldNormal = new Float32Array(PLEATS * 12)
+  const foldUv = new Float32Array(PLEATS * 8)
+  const foldIndex = []
+  for (let j = 0; j < PLEATS; j++) {
+    foldUv.set([j / PLEATS, 0, (j + 1) / PLEATS, 0, j / PLEATS, 1, (j + 1) / PLEATS, 1], j * 8)
+    foldIndex.push(j * 4, j * 4 + 1, j * 4 + 2, j * 4 + 2, j * 4 + 1, j * 4 + 3)
+  }
+  folds.setAttribute('position', new THREE.BufferAttribute(foldAt, 3))
+  folds.setAttribute('normal', new THREE.BufferAttribute(foldNormal, 3))
+  folds.setAttribute('uv', new THREE.BufferAttribute(foldUv, 2))
+  folds.setIndex(foldIndex)
+  const velvet = paperMaterial(texture(curtainArt[0].front), THREE.DoubleSide)
+  const curtains = [-1, 1].map((side) => {
+    const mesh = new THREE.Mesh(folds, velvet)
+    mesh.position.x = side * half // hung from the side wall
+    mesh.scale.x = -side
+    mesh.castShadow = mesh.receiveShadow = true
+    mesh.frustumCulled = false
+    room.add(mesh)
+    return mesh
+  })
+  const valance = makeFlat(valanceArt, { width: inner.w + 0.02 })
+  valance.mesh.position.set(0, inner.h - valance.height / 2 + 0.01, CURTAIN_Z + 0.04)
+  room.add(valance.mesh)
+
+  // 0: drawn back to the sides; 1: drawn right across. (Just below 0 is drawn
+  // back tighter still: the swing as they are pulled open.)
+  let curtain = null
+  function drawCurtains(k) {
+    if (k === curtain) return false
+    curtain = k
+    const width = GATHERED + (across - GATHERED) * k
+    const angle = Math.acos(clamp(width / laid, 0, 1))
+    const dx = pleatW * Math.cos(angle)
+    const dz = pleatW * Math.sin(angle)
+    for (let j = 0; j < PLEATS; j++) {
+      const za = CURTAIN_Z - (j % 2 ? dz : 0)
+      const zb = CURTAIN_Z - (j % 2 ? 0 : dz)
+      const xa = j * dx
+      const xb = xa + dx
+      foldAt.set([xa, 0.01, za, xb, 0.01, zb, xa, curtainH, za, xb, curtainH, zb], j * 12)
+      // alternate strips face left and right, so the lamp picks out every fold
+      const nx = (j % 2 ? -dz : dz) / pleatW
+      const nz = dx / pleatW
+      for (let v = 0; v < 4; v++) foldNormal.set([nx, 0, nz], j * 12 + v * 3)
+    }
+    folds.attributes.position.needsUpdate = true
+    folds.attributes.normal.needsUpdate = true
+    return true
+  }
+  drawCurtains(0)
+
+  // ---- on the shelf: the curtains draw closed, the slide changes, they sweep open --------
+  const nextOf = (print) => prints[((print?.i ?? -1) + 1) % count]
+  const clock = loopClock(stepped, {
+    box,
+    group: room,
+    period: LOOP,
+    active: () => mode === 'shelf' && onShelf(),
+    tick(t, prev) {
+      let changed = false
+      if (count && passed(prev, t, SWAP)) {
+        onScreen = nextOf(onScreen)
+        ensure(onScreen)
+        throwPicture(onScreen, { big: false })
+        changed = 'looks'
+      }
+      if (count && passed(prev, t, OPENED)) ensure(nextOf(onScreen)) // ready for next time round
+      const k = t < SHUT ? smooth(t / SHUT) : t < PART ? 1 : t < OPENED ? 1 - smooth((t - PART) / (OPENED - PART)) : 0
+      return drawCurtains(k) || changed
     },
+  })
+
+  // The whole scene, as the shelf first shows it: the film wound to the middle
+  // of the photos, the screen down, the projector showing one of them.
+  goal = Math.max(0, Math.min(2, count - 1))
+  scroll = goal * FRAME
+  layout()
+  if (count) {
+    onScreen = prints[goal]
+    ensure(onScreen)
+    throwPicture(onScreen, { big: false })
+    setLamp(1)
+  }
+
+  return {
+    // the curtains swing right open (from wherever they had got to) as the camera comes in
+    async open() {
+      mode = 'room'
+      const from = Math.max(0, curtain)
+      await stepped.poses([from * 0.62, from * 0.28, from * 0.06 - 0.03, -0.07, -0.025, 0], drawCurtains)
+      standing = true
+    },
+    // back on the shelf, it starts its loop again
     async close() {
       standing = false
       dragging = false
       for (const print of prints) lift(print, false)
-      await stepped.poses([0.7, 0.4, 0.1, 0], unroll)
-      await foldFlat(stepped, ordered)
+      mode = 'shelf'
+      clock.restart()
     },
 
     title: (id) => nameOf(byId(id)),
@@ -546,10 +647,11 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
     async start(id) {
       const print = byId(id)
       lift(print, false)
-      await windTo(print.i)
+      // the shutter closes on the picture that is up while the film winds to this one
+      await Promise.all([windTo(print.i), lampLevel > 0 ? stepped.poses([0.35, 0], setLamp) : null])
       ensure(print)
       await flySlide(print)
-      projected = print
+      projected = onScreen = print
       rattle()
       throwPicture(print)
       // the room goes dark while the lamp catches
@@ -569,16 +671,16 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
       await windTo(next.i)
       ensure(next)
       next.picture.visible = next.border.visible = false
-      projected = next
+      projected = onScreen = next
       throwPicture(next)
       rattle()
       await stepped.poses([0.6, 1], setLamp)
     },
 
+    // the room lights come back up; the projector stays on, still showing it
     end() {
       const print = projected
       projected = null
-      stepped.poses([0.4, 0], setLamp)
       stepped.poses([0.75, 0.5, 0.25, 0], (k) => lights?.dim(k))
       if (!print) return
       print.picture.visible = print.border.visible = true
@@ -617,6 +719,12 @@ export async function build({ box, stepped, overlay, redraw, goTo, lights }) {
       if (!standing || !count) return
       if (stepped.reduced) return jump((nearest() + Math.sign(delta)) * FRAME)
       vel = clamp(vel + delta * 0.0011, -0.3, 0.3)
+    },
+    // motion off: the curtains stay open, the picture stays up
+    motion(off) {
+      if (!off) return clock.restart()
+      drawCurtains(0)
+      redraw()
     },
   }
 }

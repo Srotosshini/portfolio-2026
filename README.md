@@ -39,7 +39,11 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `label-unbuilt` | the "still cutting this one out" strip |
 | `shelf-jar`, `shelf-roll` | loose things on the shelf |
 | `cabinet-snikisnak`, `cabinet-patchwork`, `cabinet-duckie`, `cabinet-park`, `cabinet-jam`, `cabinet-red-dot-rescue` | the cabinets, each made from a cardboard box: the name lettered in marker, the screen cut right out, bottle-cap buttons, a taped joystick |
-| `claw-machine`, `claw` | the cardboard claw machine (cut the glass out) and the claw |
+| `claw-machine`, `claw` | the cardboard claw machine inside the arcade (cut the glass out) and its claw |
+| `claw-marquee` | the games box on the shelf is a big claw machine: its marquee, a long strip across the top (about 10 : 1), with the hole for its little screen cut out |
+| `claw-panel` | its control panel, a long strip across the bottom (about 9 : 1): joystick, buttons, coin slot, the prize door at the left |
+| `claw-hub`, `claw-prong` | its claw: the hub, and one prong (the left one; it is used three times) |
+| `plush-raccoon`, `plush-chameleon`, `plush-hamster`, `plush-blob`, `plush-duck`, `plush-kitten` | the plush toys in it, one drawing each. Which game each comes from is the `plushies` list in [src/data/projects.js](src/data/projects.js) |
 | `character-1`, `character-2`, `character-3` | characters hanging in the claw machine |
 | `poster-snikisnak`, `poster-patchwork`, `poster-duckie` | the posters of your games on the arcade wall (the first three games) |
 | `ticket-counter`, `fun-pass` | the ticket counter (its ticket machine on top, at the right) and the fun pass propped on it |
@@ -47,6 +51,8 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `cutout-spatial-equity` | the quiet cutout for Spatial Equity |
 | `reel`, `reel-stand`, `crank` | photography: a film reel (cut its holes out), what it stands on, and the handle on the right-hand one |
 | `projector` | photography: the slide projector, lens pointing right |
+| `curtain` | photography: one red velvet curtain, drawn flat as one whole sheet (it is folded into 12 pleats; one tracing) |
+| `curtain-valance` | photography: the pelmet across the top of the opening, a long strip (about 16 : 1) |
 | `screen` | photography: the paper sheet the photos are projected onto (one tracing is enough) |
 | `photo-corners` | photography: four photo corners on a transparent sheet, laid over every print |
 | `pack-fall-2026`, `pack-spring-2026`, … (`pack-<set>`) | creative coding: a booster pack's wrapper, front. Draw it on a sheet about 480 × 700, filling the sheet, with the tear line 14 % down from the top (the strip above it is what tears off). One tracing: packs don't boil |
@@ -66,7 +72,11 @@ Each placeholder is replaced by saving the real file under the name listed below
 | `market-mug`, `market-steam`, `market-sled`, `market-robin`, `market-robin-hop` | design: the mug on a window sill and its steam (draw two or three tracings: it rises), the sled, the robin standing and mid-hop (same size of sheet for both) |
 | `market-note` | design: the "click a stall to go inside" note hanging from the lights |
 | `market-back`, `market-case` | design: the "← back to the market" sign inside every stall, and the case study note pinned up in it |
-| `self-portrait` | About |
+| `doodle` | About: your doodle, standing in your room. It is also the you in every polaroid, so one drawing changes them all |
+| `selfie-camera` | About: your camera on its tripod, lens pointing left (toward you). If its countdown light, flash or photo slot are not where the stand-in has them, change `LIGHT`, `FLASH` and `SLOT` at the top of [src/rooms/about.js](src/rooms/about.js) |
+| `corkboard`, `room-desk` | About: the corkboard on the wall, the desk under it |
+| `pushpin` | About: a pushpin seen from the front (`pushpin-1`, `-2`, `-3` are used as three colours) |
+| `place-dhaka`, `place-abu-dhabi`, `place-shanghai`, `place-zhangjiajie` (`place-<name>`) | About: the places behind you in the polaroids, square. The list of places is `about.places` in [src/data/projects.js](src/data/projects.js); add a name there and a drawing here |
 
 If your projector drawing puts the lens or the slide slot somewhere other than the stand-in's, change `LENS` and `SLOT` at the top of [src/rooms/photography.js](src/rooms/photography.js) (fractions of the drawing's width and height).
 
@@ -153,7 +163,8 @@ index.html            the shelf
 list.html             the plain list (baked at build time, works without JavaScript)
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
-src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, about.js)
+src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, design.js, about.js);
+                      plush-machine.js is the claw machine the games box is on the shelf
 src/data/design.js    the Christmas market's stalls and words
 src/data/sets.js      the creative coding booster packs, one per semester
 src/data/sketches.js  the cards (your sketches) and the card shop's words
@@ -166,6 +177,9 @@ src/lib/sound.js      the sound switch's sounds
 src/lib/paper.js      cutout, tab, shadow, pop-up, line boil
 src/lib/scraps.js     paper off-cuts that fly up when pieces pop and stay on the floor
 src/lib/stepped.js    the 12 fps stop-motion clock
+src/lib/loop.js       the little scene each box plays over and over on the shelf
+src/lib/plushies.js   stand-in drawings for the claw machine and its plush toys; nothing here should survive
+src/lib/polaroids.js  stand-in drawings for the About room: camera, corkboard, desk, the places; nothing here should survive
 src/lib/camera.js     camera framing and moves
 src/lib/overlay.js    buttons over the scene, the paper card, clips behind the screens
 src/lib/pages.js      the project page template (shared by the cards and the list)

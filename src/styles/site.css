@@ -171,6 +171,30 @@ a {
   opacity: 1;
 }
 
+/* the About camera's big flash, as its box is opened (a fade: it is skipped with motion off) */
+.camera-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: #fffdf6;
+  opacity: 0;
+  pointer-events: none;
+}
+.camera-flash.is-on {
+  animation: camera-flash 0.65s ease-out;
+}
+@keyframes camera-flash {
+  from {
+    opacity: 0.94;
+  }
+  to {
+    opacity: 0;
+  }
+}
+:root[data-motion='off'] .camera-flash {
+  display: none;
+}
+
 /* the film in the reel room can be taken hold of anywhere */
 body[data-room='photography'][data-place='room'] {
   cursor: grab;

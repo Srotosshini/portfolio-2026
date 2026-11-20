@@ -7,6 +7,7 @@
 // build) runs there. The arcade stands on the shelf too, in miniature, so it
 // is built as soon as the shelf has settled and never folds away.
 import * as THREE from 'three'
+import { buildPlushMachine } from './plush-machine.js'
 import { projects, site } from '../data/projects.js'
 import { PALETTE as P, makePiece, makeFlat, texture, fillArea, canvas, stack, boil, rng } from '../lib/paper.js'
 import { createScraps } from '../lib/scraps.js'
@@ -25,16 +26,20 @@ const FRONT_ROW = -2.02
 
 const SCREEN_IDLE = 0.62 // how bright a screen is when nobody is looking at it
 
-export async function build({ box, stepped, overlay, redraw, goTo }) {
+export async function build({ box, stepped, overlay, redraw, goTo, onShelf }) {
   const { inner } = box
+  // On the shelf the box is a claw machine full of plush toys (plush-machine.js);
+  // the arcade is inside it, and only shows once the camera goes in.
+  const both = new THREE.Group()
+  box.body.add(both)
   const room = new THREE.Group()
   room.position.y = inner.floor
-  box.body.add(room)
+  room.visible = false
+  both.add(room)
 
   const games = projects.filter((p) => p.box === box.id && p.kind === 'cabinet')
   const quiet = projects.filter((p) => p.box === box.id && p.kind === 'cutout')
   const rand = rng(77)
-  const onShelf = () => document.body.dataset.place === 'shelf'
   const lerp = THREE.MathUtils.lerp
 
   // her drawings where they exist, labelled stand-ins where they do not
@@ -539,7 +544,7 @@ export async function build({ box, stepped, overlay, redraw, goTo }) {
   for (const piece of ordered) piece.setFold(0)
   let standing = false // is someone in the room?
   let playing = null // the cabinet whose game is open
-  const lively = () => standing || onShelf()
+  const lively = () => standing
 
   boil(stepped, [...ordered, ...toys.map((t) => t.toy), claw], () => lively() && !playing)
 
@@ -565,11 +570,21 @@ export async function build({ box, stepped, overlay, redraw, goTo }) {
 
   const find = (id) => [...cabinets, ...cutouts].find((c) => (c.game ?? c.project).id === id)
 
+  const plush = await buildPlushMachine({ box, stepped, onShelf })
+  both.add(plush.group)
+  const showRoom = (on) => {
+    room.visible = on
+    plush.group.visible = !on
+    redraw()
+  }
+
   return {
     // Coming in: the bulbs come on along the string one after another, and the
     // cabinets give a nod in turn.
     async open() {
       setBulbs(0)
+      // the claw drops its toy down the chute, the lights flare, and there is the arcade
+      await plush.win(() => showRoom(true))
       await Promise.all([
         stepped.play(bulbAt.length, (t) => setBulbs(Math.round(t * bulbAt.length))),
         ...ordered.map((piece, i) =>
@@ -587,8 +602,10 @@ export async function build({ box, stepped, overlay, redraw, goTo }) {
       resetTickets()
       claw.mesh.position.copy(clawHome)
       machine.hinge.rotation.z = 0
-      // (everything stays standing: the arcade is on show on the shelf)
+      // and back to a claw machine for the shelf
+      await plush.restore(() => showRoom(false))
     },
+    motion: (off) => plush.motion(off),
 
     title: (id) => (find(id).game ?? find(id).project).title,
     spot: (id) => find(id)?.spot,

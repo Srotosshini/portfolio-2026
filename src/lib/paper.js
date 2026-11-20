@@ -29,10 +29,14 @@ export function rng(seed) {
   }
 }
 
+// A sheet to draw on. Its pixels are kept in memory rather than on the
+// graphics card: every drawing is read back once to be cut out (prepCutout),
+// and reading back from the card stalls for tens of milliseconds a time.
 export function canvas(w, h) {
   const c = document.createElement('canvas')
   c.width = w
   c.height = h
+  c.getContext('2d', { willReadFrequently: true }) // (later getContext('2d') calls get this same one)
   return c
 }
 
@@ -110,27 +114,23 @@ export function prepCutout(source, { edge = 5, maxSize = 1024, trim = true } = {
   const ox = edge - x0
   const oy = edge - y0
 
+  // the paper's cut edge: the silhouette grown by `edge` pixels, white on
+  // the front, the back of the paper behind
+  const rim = edge > 0 ? grow(px, w, h, ox, oy, W, H, edge) : null
   const front = canvas(W, H)
   let ctx = front.getContext('2d')
-  if (edge > 0) {
-    // the silhouette, grown by `edge` pixels and filled paper-white
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2
-      ctx.drawImage(work, ox + Math.cos(a) * edge, oy + Math.sin(a) * edge)
-    }
-    ctx.globalCompositeOperation = 'source-in'
-    ctx.fillStyle = PALETTE.cut
-    ctx.fillRect(0, 0, W, H)
-    ctx.globalCompositeOperation = 'source-over'
-  }
+  if (rim) ctx.putImageData(fillMask(ctx, rim, PALETTE.cut), 0, 0)
   ctx.drawImage(work, ox, oy)
 
   const back = canvas(W, H)
   ctx = back.getContext('2d')
-  ctx.drawImage(front, 0, 0)
-  ctx.globalCompositeOperation = 'source-in'
-  ctx.fillStyle = PALETTE.paperBack
-  ctx.fillRect(0, 0, W, H)
+  if (rim) ctx.putImageData(fillMask(ctx, rim, PALETTE.paperBack), 0, 0)
+  else {
+    ctx.drawImage(front, 0, 0)
+    ctx.globalCompositeOperation = 'source-in'
+    ctx.fillStyle = PALETTE.paperBack
+    ctx.fillRect(0, 0, W, H)
+  }
   ctx.globalCompositeOperation = 'source-atop'
   ctx.globalAlpha = 0.07
   ctx.drawImage(work, ox, oy)
@@ -138,6 +138,71 @@ export function prepCutout(source, { edge = 5, maxSize = 1024, trim = true } = {
   const hole = findWindow(px, w, h)
   const window = hole && { x: (hole.x + ox) / W, y: (hole.y + oy) / H, w: hole.w / W, h: hole.h / H }
   return { front, back, aspect: W / H, window }
+}
+
+// Everything within `edge` pixels of the drawing (`px`, w × h, placed at
+// ox, oy on a W × H sheet), as an alpha mask with a soft outer pixel: two
+// sweeps of a chamfer distance (3 a step straight across, 4 diagonally).
+function grow(px, w, h, ox, oy, W, H, edge) {
+  const d = new Uint16Array(W * H).fill(65535)
+  for (let y = 0; y < h; y++) {
+    const oy2 = y + oy
+    if (oy2 < 0 || oy2 >= H) continue
+    for (let x = 0; x < w; x++) {
+      const ox2 = x + ox
+      if (ox2 >= 0 && ox2 < W && px[(y * w + x) * 4 + 3] > 16) d[oy2 * W + ox2] = 0
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x
+      let v = d[i]
+      if (!v) continue
+      if (x > 0 && d[i - 1] + 3 < v) v = d[i - 1] + 3
+      if (y > 0) {
+        if (d[i - W] + 3 < v) v = d[i - W] + 3
+        if (x > 0 && d[i - W - 1] + 4 < v) v = d[i - W - 1] + 4
+        if (x < W - 1 && d[i - W + 1] + 4 < v) v = d[i - W + 1] + 4
+      }
+      d[i] = v
+    }
+  }
+  for (let y = H - 1; y >= 0; y--) {
+    for (let x = W - 1; x >= 0; x--) {
+      const i = y * W + x
+      let v = d[i]
+      if (!v) continue
+      if (x < W - 1 && d[i + 1] + 3 < v) v = d[i + 1] + 3
+      if (y < H - 1) {
+        if (d[i + W] + 3 < v) v = d[i + W] + 3
+        if (x < W - 1 && d[i + W + 1] + 4 < v) v = d[i + W + 1] + 4
+        if (x > 0 && d[i + W - 1] + 4 < v) v = d[i + W - 1] + 4
+      }
+      d[i] = v
+    }
+  }
+  const reach = edge * 3
+  const mask = new Uint8ClampedArray(W * H)
+  for (let i = 0; i < mask.length; i++) mask[i] = d[i] <= reach ? 255 : d[i] < reach + 3 ? ((reach + 3 - d[i]) * 255) / 3 : 0
+  return mask
+}
+
+// one colour wherever the mask is, as pixels for putImageData
+function fillMask(ctx, mask, hex) {
+  const img = ctx.createImageData(ctx.canvas.width, ctx.canvas.height)
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const data = img.data
+  for (let i = 0, k = 0; i < mask.length; i++, k += 4) {
+    const a = mask[i]
+    if (!a) continue
+    data[k] = r
+    data[k + 1] = g
+    data[k + 2] = b
+    data[k + 3] = a
+  }
+  return img
 }
 
 // The largest transparent region that is closed in by paper on all sides.

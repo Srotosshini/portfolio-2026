@@ -6,6 +6,9 @@
 // the counter; rip it open and the cards burst out across the mat, the set's
 // favourite last and face down, until it turns itself over. Opened cards go
 // into the binder on the counter, which remembers them between visits.
+// On the shelf the case plays a loop: the packs dive into their steps, the
+// top one first, then climb back up the staircase from the bottom step, each
+// to its own semester, their lights coming back on as they arrive.
 //
 // The case, the packs and the counter are paper in the scene and move in
 // 12 fps steps. The cards are HTML laid over the scene, each one mapped onto
@@ -19,6 +22,7 @@ import { PALETTE as P, makeFlat, texture, paperMaterial, softShadow, boil, rng, 
 import * as drawn from '../lib/placeholders.js'
 import * as shop from '../lib/shop.js'
 import { art, has, base, turn, tracingsOf, loadImage, scan } from '../lib/assets.js'
+import { loopClock, smooth } from '../lib/loop.js'
 import { sound } from '../lib/sound.js'
 import { preview } from '../lib/sketches.js'
 import { ASPECT, setSize, makeCard, makeBinder, makeCardView, frameCanvas, frameUrl, backUrl, chaseOf, finishOf, tintOf } from '../lib/trading-cards.js'
@@ -84,7 +88,7 @@ function liveTexture(source) {
   return t
 }
 
-export async function build({ box, stepped, overlay, redraw, goTo, look, camera }) {
+export async function build({ box, stepped, overlay, redraw, goTo, look, camera, onShelf }) {
   const { inner } = box
   const room = new THREE.Group()
   room.position.y = inner.floor
@@ -210,7 +214,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     const pack = {
       set, i, w, h, group, lift, lean, body, rear, strip, segs,
       home: new V3(stepX(i), stepTop(i) + 0.03, STEP_FRONT - 0.24),
-      standing: false,
+      standing: true, // on its stand (not out on the counter)
       lifting: 0,
       slabs: [],
       spot: null,
@@ -230,9 +234,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     }
     group.position.copy(pack.home)
     lean.rotation.x = LEAN
-    // it comes in when the case is opened; until then it is there but tiny,
-    // so its shaders are compiled with the rest of the room
-    group.scale.setScalar(1e-4)
     room.add(group)
     return pack
   }
@@ -302,7 +303,6 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
       holder.position.set(stepX(i) + (k - (shown.length - 1) / 2) * 0.13, top + 0.11, STEP_FRONT - 0.78 + (mid ? 0.03 : 0))
       holder.rotation.z = -angles[k]
       holder.add(mesh)
-      holder.scale.setScalar(1e-4)
       room.add(holder)
       const slab = { holder, display, tex, pic: s ? made.pic : null, s, still: null, poster: null, video: null }
       if (s) {
@@ -352,6 +352,8 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     room.add(tag.mesh)
     boiling.push(tag)
   }
+
+  for (const lamp of lamps) setLamp(lamp, 1) // the case is lit, on the shelf too
 
   // the picture in a slab: her poster, her clip while the pointer is on its pack, or a stand-in
   function drawSlab(slab, frame) {
@@ -859,8 +861,11 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     lamp.beam.material.opacity = k * lamp.level * BEAM
     lamp.beam.visible = k > 0.001
   }
-  const lightsTo = (on) =>
-    Promise.all(lamps.map((lamp, i) => stepped.poses(on ? [0.3, 0, 0.8, 0.45, 1] : [0.4, 0], (k) => setLamp(lamp, k), { delay: on ? 2 + i * 2 : 0 })))
+  // a strip light flickers on, or goes off (a newer switch takes over from an older one)
+  function lampTo(lamp, on, delay = 0) {
+    const mine = (lamp.run = (lamp.run || 0) + 1)
+    return stepped.poses(on ? [0.3, 0, 0.8, 0.45, 1] : [0.4, 0], (k) => mine === lamp.run && setLamp(lamp, k), { delay })
+  }
 
   function dropIn(pack, delay = 0) {
     pack.group.scale.setScalar(1)
@@ -871,6 +876,112 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
         for (const slab of pack.slabs) slab.holder.position.y = stepTop(pack.i) + 0.11 + dy * 1.3
       }, { delay })
       .then(() => (pack.standing = true))
+  }
+
+  // ---- on the shelf: the packs dive into their steps and climb back up ----------------------
+  // Each pack, the top one first, gives a little hop and drops into its own
+  // step (behind the step's front, as if through a slot in its top). Then
+  // they come back up out of the bottom step, the newest first, and hop up
+  // the staircase to their own steps: the climb from her first semester to
+  // now. A step's light goes off as its pack leaves and comes back on as it
+  // gets home. (Seconds into the loop.)
+  const LOOP = 8.25
+  const DIVE_GAP = 0.17 // between one pack diving and the next
+  const DIVE = 0.42 // how long a dive takes
+  const CLIMB = 1.5 // when the first one comes back up
+  const CLIMB_GAP = 0.6 // between one coming back and the next
+  const POP = 0.25 // up out of the bottom step
+  const HOP = 0.3 // up one step
+  const FLOOR = -0.22 // nothing goes lower (any lower would show under the shelf board): it squashes instead
+  const stepY = (s) => stepTop(s) + 0.03
+  const lit = packs.map(() => true)
+
+  // Put a pack at (x, y). `inside`: the top of the step it is going into or
+  // coming out of; whatever is below that is hidden behind the step's front.
+  function placeAt(pack, x, y, inside = null) {
+    let sy = 1
+    if (y < FLOOR) {
+      sy = Math.max(0.05, (y + pack.h - FLOOR) / pack.h)
+      y = FLOOR
+    }
+    const g = pack.group
+    const visible = inside == null || y + pack.h * sy > inside + 0.005
+    if (g.position.x === x && g.position.y === y && g.scale.y === sy && g.visible === visible) return false
+    g.position.set(x, y, pack.home.z)
+    g.scale.set(1, sy, 1)
+    g.visible = visible
+    return true
+  }
+  function loopPose(pack, t) {
+    const i = pack.i
+    const dive = (n - 1 - i) * DIVE_GAP
+    const back = CLIMB + (n - 1 - i) * CLIMB_GAP
+    const deep = pack.h + 0.06
+    if (t < dive || t >= back + POP + i * HOP) return { x: stepX(i), y: stepY(i), lit: true }
+    if (t < dive + DIVE) {
+      const k = (t - dive) / DIVE
+      const y = k < 0.3 ? stepY(i) + 0.05 * Math.sin(((k / 0.3) * Math.PI) / 2) : stepY(i) + 0.05 - (deep + 0.05) * smooth((k - 0.3) / 0.7)
+      return { x: stepX(i), y, inside: stepTop(i), lit: k < 0.3 }
+    }
+    if (t < back) return { x: stepX(i), y: stepY(i) - deep, inside: stepTop(i), lit: false }
+    if (t < back + POP) return { x: stepX(0), y: stepY(0) - deep * (1 - smooth((t - back) / POP)), inside: stepTop(0), lit: false }
+    const hop = (t - back - POP) / HOP
+    const s = Math.floor(hop)
+    const f = hop - s
+    return { x: lerp(stepX(s), stepX(s + 1), f), y: lerp(stepY(s), stepY(s + 1), f) + Math.sin(Math.PI * f) * 0.15, lit: false }
+  }
+  const shelfLoop = loopClock(stepped, {
+    box,
+    group: room,
+    period: LOOP,
+    active: () => mode === 'closed' && onShelf(),
+    tick(t) {
+      let moved = false
+      for (const pack of packs) {
+        const pose = loopPose(pack, t)
+        if (placeAt(pack, pose.x, pose.y, pose.inside)) moved = true
+        if (pose.lit !== lit[pack.i]) {
+          lit[pack.i] = pose.lit
+          lampTo(lamps[pack.i], pose.lit)
+        }
+      }
+      return moved
+    },
+  })
+  // Clicked: every pack straight back onto its stand, from wherever the loop
+  // had got it to (one still inside its step comes up out of it), lights on.
+  function settlePacks() {
+    return Promise.all(
+      packs.map((pack) => {
+        const i = pack.i
+        const g = pack.group
+        const { x: hx, y: hy } = pack.home
+        if (!lit[i]) {
+          lit[i] = true
+          lampTo(lamps[i], true)
+        }
+        if (g.visible && g.position.x === hx && g.position.y === hy && g.scale.y === 1) return null
+        const hidden = !g.visible
+        const x0 = hidden ? stepX(i) : g.position.x
+        const y0 = hidden ? stepY(i) - (pack.h + 0.06) : g.position.y + pack.h * (g.scale.y - 1) // (where its top is, if it was squashed)
+        const bump = [0.06, 0.09, 0.06, 0.02, -0.01, 0]
+        return stepped.poses([0.25, 0.55, 0.82, 1, 1, 1], (f, k) =>
+          placeAt(pack, lerp(x0, hx, f), lerp(y0, hy, f) + (hidden ? 0 : bump[k]), hidden ? stepTop(i) : null),
+        )
+      }),
+    )
+  }
+  // the whole showcase, still (motion off, or back from inside)
+  function showcase() {
+    for (const pack of packs) {
+      pack.group.scale.setScalar(1)
+      placeAt(pack, pack.home.x, pack.home.y)
+      pack.standing = true
+      if (!lit[pack.i]) {
+        lit[pack.i] = true
+        lampTo(lamps[pack.i], true)
+      }
+    }
   }
 
   function liftTo(pack, poses) {
@@ -1425,15 +1536,17 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
       relayout()
       layer.hidden = false
       setBack(site.ui.toShelf)
-      // the cellophane slides up
+      // the packs settle into the whole showcase as the cellophane slides up
       const front = box.front
-      if (front) {
+      const slide = async () => {
+        if (!front) return
         placeClip(front)
         await stepped.poses([0.06, 0.18, 0.38, 0.62, 0.85, 1.02], (k) => (front.mesh.position.y = front.y + k * front.height))
         front.mesh.visible = false
         front.mesh.position.y = front.y
       }
-      // the counter pulls out, the lights come on bottom to top, the packs come in
+      await Promise.all([settlePacks(), slide()])
+      // the counter pulls out and the sign comes down
       tray.visible = true
       binderHinge.rotation.x = -1.2
       signHang.visible = true
@@ -1442,9 +1555,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
         stepped
           .poses([-1.3, -0.95, -0.6, -0.3, -0.08, 0.03, 0].map((k) => k * TRAY_D), (z) => (tray.position.z = z))
           .then(() => stepped.poses([-0.9, -0.5, -0.15, 0.08, -0.03, 0], (a) => (binderHinge.rotation.x = a))),
-        lightsTo(true),
-        ...packs.filter((pack) => !pack.standing).map((pack) => dropIn(pack, 3 + pack.i * 2)),
-        stepped.poses([0.3, 0.7, 1.08, 0.96, 1.02, 1], hangSign, { delay: 6 }),
+        stepped.poses([0.3, 0.7, 1.08, 0.96, 1.02, 1], hangSign, { delay: 3 }),
       ])
       mode = 'case'
       overlay.update()
@@ -1480,8 +1591,8 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
       dimmer.visible = false
       dimmer.material.opacity = 0
       dimming++
+      showcase()
       await Promise.all([
-        lightsTo(false),
         stepped.poses([-0.08, -0.35, -0.7, -1.05, -1.3].map((k) => k * TRAY_D), (z) => (tray.position.z = z)).then(() => (tray.visible = false)),
         stepped.poses([0.7, 0.3, 0.08], hangSign).then(() => (signHang.visible = false)),
       ])
@@ -1493,6 +1604,7 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
         front.clip.set(new V3(0, -1, 0), 1e5) // clips nothing again
       }
       mode = 'closed'
+      shelfLoop.restart() // back on the shelf: the loop starts again
     },
 
     title: (slug) => bySlug(slug)?.title || '',
@@ -1525,6 +1637,12 @@ export async function build({ box, stepped, overlay, redraw, goTo, look, camera 
     },
     pointer(fx) {
       shine = fx
+    },
+    // motion off: the whole showcase, still
+    motion(off) {
+      if (!off) return shelfLoop.restart()
+      if (mode === 'closed') showcase()
+      redraw()
     },
     // every frame: the cards follow the camera (they are HTML over the scene)
     frame() {

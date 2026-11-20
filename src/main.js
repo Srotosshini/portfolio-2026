@@ -10,8 +10,8 @@ import { itemExists } from './lib/pages.js'
 import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
 
-// One file per room. A room's code and drawings are only fetched the first
-// time its box is opened (or hovered).
+// One file per room. A room's code and drawings are fetched once the shelf
+// is up (or the first time its box is opened or hovered).
 //   card: the room always has its paper card open beside it (About)
 //   whole: always frame the whole room; it uses sideways drags itself
 //   slim: its pages are caption slips, not full project cards
@@ -24,14 +24,14 @@ import { buildShelf } from './shelf.js'
 //            screen it can be swiped sideways, like a room.
 //   perUnit: on a narrow screen, at most this many pixels across per scene unit
 //            (how close the camera comes before the room has to be swiped)
-//   early:   made as soon as the shelf has settled, so its box shows its
-//            scene (the market) without anyone pointing at it first
+//   early:   made as soon as the shelf is up, so its box shows its whole
+//            scene on the shelf and then plays its loop there (see lib/loop.js)
 const ROOMS = {
   games: { load: () => import('./rooms/arcade.js'), early: true },
-  photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, focus: 0.3, fit: 1.05 },
-  'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
+  photography: { load: () => import('./rooms/photography.js'), whole: true, slim: true, early: true, focus: 0.3, fit: 1.05 },
+  'creative-coding': { load: () => import('./rooms/creative-coding.js'), whole: true, inPlace: true, early: true, focus: 0.32, fit: 1.1, narrow: 0.96 },
   design: { load: () => import('./rooms/design.js'), bare: true, early: true, focus: 0.42, fit: 1.04, perUnit: 150 },
-  about: { load: () => import('./rooms/about.js'), card: true },
+  about: { load: () => import('./rooms/about.js'), card: true, early: true },
 }
 
 // Inside a box the camera sits a little above centre and looks down, the way
@@ -171,24 +171,34 @@ async function start() {
 
   // ---- where we are -----------------------------------------------------
   const here = { box: null, item: null, look: null } // item: a project, a photograph, a card; look: see look()
-  const rooms = new Map()
-  // A room is made the first time it is wanted: as soon as the pointer or
-  // keyboard focus reaches its box, so it is usually ready by the click.
-  // Its shaders are compiled before its first frame, so that frame is quick.
+  const rooms = new Map() // the rooms made so far, each ready to be shown
+  // Is the shelf on screen? Also while the camera is on its way from it into a
+  // box: the other boxes keep playing their loops as they slide out of view.
+  let flying = false
+  const onShelf = () => !here.box || flying
+  // A room is made as soon as the shelf is up (or the first time it is
+  // wanted, if that comes sooner). Its shaders are compiled and its drawings
+  // sent to the graphics card before it is shown, so it never stalls a frame.
   const making = new Map()
   function prepare(id) {
     if (!making.has(id)) {
       const box = shelf.boxes.get(id)
       const before = new Set(box.body.children)
+      // Keep the new room out of sight until it is whole and can be drawn
+      // without a stall: what it puts in its box is hidden as it goes in,
+      // then shown once its shaders are compiled (in the background) and its
+      // drawings are on the graphics card.
+      const add = box.body.add
+      box.body.add = (...objects) => {
+        for (const object of objects) object.visible = false
+        return add.apply(box.body, objects)
+      }
       const made = ROOMS[id]
         .load()
-        .then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights, look, camera: rig.camera }))
+        .then((room) => room.build({ box, stepped, overlay, redraw, goTo, lights, look, camera: rig.camera, onShelf }))
+        .finally(() => delete box.body.add) // (back to the usual add)
         .then(async (room) => {
-          // Keep the new room out of sight until it can be drawn without a
-          // stall: shaders compiled in the background, drawings already on
-          // the graphics card (sent one per frame).
           const added = box.body.children.filter((child) => !before.has(child))
-          for (const child of added) child.visible = false
           await renderer.compileAsync(box.body, rig.camera, scene).catch(() => {})
           while (unsent.length) {
             await turn()
@@ -196,6 +206,7 @@ async function start() {
             if (next) renderer.initTexture(next)
           }
           for (const child of added) child.visible = true
+          rooms.set(id, room)
           redraw()
           return room
         })
@@ -323,30 +334,37 @@ async function start() {
     box.hover(false) // put it down: it was picked up when the pointer arrived
     overlay.cardSize('')
     const loading = prepare(id)
+    const made = rooms.get(id) // already made: its box has been playing its loop on the shelf
     here.box = id
     here.look = null
     labels(false)
     pan = -Infinity // start at the left end of the room
     setPlace('room')
     overlay.say(box.data.label)
-    // push in while the room loads; the pieces start standing up just before the camera arrives
+    // The camera pushes in. A room that is already made goes straight to its
+    // whole, open scene as the glide starts and carries on from there; one
+    // still being made stands up just before the camera arrives.
     await veil(true)
-    const moving = rig.go(roomRect(box), { region: ROOMS[id].card ? overlay.stageRegion() : FULL, duration: 1.4, lift: ROOM_LIFT })
-    let room
-    try {
-      ;[room] = await Promise.all([loading, stepped.reduced ? null : sleep(850)])
-    } catch (error) {
-      // the room would not load (offline, say): back out to the shelf rather than strand the camera
-      here.box = null
-      labels(true)
-      setPlace('shelf')
-      history.replaceState(null, '', '#/')
-      await rig.go(shelf.frame(), { duration: 0.8, lift: 0 })
-      veil(false)
-      overlay.showSpots('shelf')
-      throw error
+    flying = true
+    const moving = rig
+      .go(roomRect(box), { region: ROOMS[id].card ? overlay.stageRegion() : FULL, duration: 1.4, lift: ROOM_LIFT })
+      .then(() => (flying = false))
+    let room = made
+    if (!room) {
+      try {
+        ;[room] = await Promise.all([loading, stepped.reduced ? null : sleep(850)])
+      } catch (error) {
+        // the room would not load (offline, say): back out to the shelf rather than strand the camera
+        here.box = null
+        labels(true)
+        setPlace('shelf')
+        history.replaceState(null, '', '#/')
+        await rig.go(shelf.frame(), { duration: 0.8, lift: 0 })
+        veil(false)
+        overlay.showSpots('shelf')
+        throw error
+      }
     }
-    rooms.set(id, room)
     await Promise.all([moving.then(() => aimLamp(box.view())), room.open()])
     veil(false)
     if (room.card && ROOMS[id].card) await overlay.showCard(room.card())
@@ -455,8 +473,8 @@ async function start() {
       corners: box.corners,
       onHover(on) {
         if (busy) return
-        box.hover(on)
-        if (on && open) prepare(box.id).catch(() => {}) // make the room while they make up their mind
+        box.hover(on) // (it brightens, and its loop runs a little faster)
+        if (on && open) prepare(box.id).catch(() => {}) // (made already, unless it is still on its way)
       },
       onClick() {
         if (open) return goTo(`#/${box.id}`)
@@ -543,7 +561,7 @@ async function start() {
   })()
   function setMotion(off) {
     stepped.reduced = rig.reduced = overlay.reduced = off
-    for (const room of rooms.values()) room.motion?.(off) // (the market's snow stops falling)
+    for (const room of rooms.values()) room.motion?.(off) // (each shows its whole scene, still)
     document.documentElement.dataset.motion = off ? 'off' : 'on'
     motion.textContent = off ? ui.startMotion : ui.stopMotion
     if (off) shelf.settle()
@@ -632,6 +650,13 @@ async function start() {
   // or a project goes straight there.
   const arrived = wanted().box ? settle() : shelf.playIntro()
 
+  // Make the rooms while the opening plays, one after another in the order
+  // their boxes are set down: each box shows its whole scene as soon as its
+  // room is ready, then starts its loop.
+  Object.keys(ROOMS)
+    .filter((id) => ROOMS[id].early && shelf.boxes.get(id)?.data.built)
+    .reduce((before, id) => before.then(() => prepare(id).catch(() => {})), Promise.resolve())
+
   // Once the shelf has settled, in a still moment, compile the kinds of shader
   // the rooms use (light beams, dust, glows, paper scraps), so the first box
   // opened does not stop to compile them. No room's drawings are loaded for this.
@@ -658,10 +683,6 @@ async function start() {
       renderer
         .compileAsync(kinds, rig.camera, scene)
         .catch(() => {})
-        .then(() => {
-          // the rooms whose boxes show their scene from the shelf
-          for (const [id, conf] of Object.entries(ROOMS)) if (conf.early && shelf.boxes.get(id)?.data.built) prepare(id).catch(() => {})
-        })
         .finally(() => {
           scene.remove(kinds)
           kinds.traverse((o) => {

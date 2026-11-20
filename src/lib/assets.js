@@ -57,22 +57,37 @@ export async function art(stem, placeholder, { edge = 5, tracings = 2, trim = tr
   return preps
 }
 
-// Drawing a stand-in or cutting out a drawing is slow work. It is done one
-// piece per animation frame, so a camera glide keeps moving while a room is
-// being made, instead of freezing and then jumping to the end.
+// Drawing a stand-in or cutting out a drawing is slow work. It is done a
+// piece at a time, in the time each frame has to spare: at least one piece per
+// frame, more while the frame is still young. So the rooms are made quickly
+// while the page is quiet, and a camera glide keeps moving while one is being
+// made, instead of freezing and then jumping to the end.
+const BUDGET = 11 // milliseconds into a frame that slow work may carry on
 const waiting = []
 let pumping = false
-function pump() {
-  waiting.shift()?.()
-  if (waiting.length) requestAnimationFrame(pump)
-  else pumping = false
+let frameStart = 0
+const next = new MessageChannel()
+function step(first) {
+  if (!waiting.length) {
+    pumping = false
+    return
+  }
+  if (first || performance.now() - frameStart < BUDGET) {
+    waiting.shift()()
+    next.port2.postMessage(0) // (runs once the piece just let go has gone as far as its next turn)
+  } else requestAnimationFrame(onFrame)
 }
+function onFrame(time) {
+  frameStart = time
+  step(true)
+}
+next.port1.onmessage = () => step(false)
 export function turn() {
   return new Promise((resolve) => {
     waiting.push(resolve)
     if (!pumping) {
       pumping = true
-      requestAnimationFrame(pump)
+      requestAnimationFrame(onFrame)
     }
   })
 }
