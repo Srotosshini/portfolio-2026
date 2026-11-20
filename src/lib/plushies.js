@@ -1,330 +1,745 @@
 // Stand-in drawings for the claw machine on the games box: the characters
-// from her games as plush toys, drawn in marker on paper, soft and round, their
-// seams stitched; and the machine's own parts (the marquee, the control panel,
-// the inside, the claw). Like everything in placeholders.js, each one is
-// replaced by her own drawing when the file exists (see the README).
-import { PALETTE as P, rng, canvas } from './paper.js'
-import { marker, write, fibres, oval, star } from './placeholders.js'
+// from her games as stuffed toys (soft and round, shaded like something puffy,
+// felt-fuzzy, stitched, with shiny button eyes), and the machine they are in:
+// painted cardboard in sweet-shop colours, its cut edges showing the
+// corrugation. Like everything in placeholders.js, each one is replaced by her
+// own drawing when the file exists (see the README).
+import { rng, canvas } from './paper.js'
+import { write, HAND, fibres } from './placeholders.js'
 
-const INK = '#2d2a3a'
-const OUTFIT = '#3d3944' // the heist crew's dark clothes
-const STRAP = '#7a5236' // and their satchels
+// ---- colour
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+const mixHex = (a, b, t) => '#' + hex(a).map((v, i) => Math.round(v + (hex(b)[i] - v) * t).toString(16).padStart(2, '0')).join('')
+const darker = (h, t = 0.45) => mixHex(h, '#1c1418', t)
+const lighter = (h, t = 0.4) => mixHex(h, '#ffffff', t)
 
-// a row of stitches along a seam
-function stitches(ctx, pts, color = 'rgba(255, 250, 238, 0.8)', width = 2.6) {
+// ---- shapes: an ellipse, or a smooth closed curve through points
+const oval = (cx, cy, rx, ry, rot = 0) => ({
+  path(ctx) {
+    ctx.beginPath()
+    ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2)
+  },
+  box: { x: cx - Math.max(rx, ry), y: cy - Math.max(rx, ry), w: 2 * Math.max(rx, ry), h: 2 * Math.max(rx, ry) },
+})
+const curve = (pts) => {
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  return {
+    path(ctx) {
+      const n = pts.length
+      ctx.beginPath()
+      ctx.moveTo(pts[0][0], pts[0][1])
+      for (let i = 0; i < n; i++) {
+        const p0 = pts[(i - 1 + n) % n]
+        const p1 = pts[i]
+        const p2 = pts[(i + 1) % n]
+        const p3 = pts[(i + 2) % n]
+        ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1])
+      }
+      ctx.closePath()
+    },
+    box: { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) },
+  }
+}
+
+// A soft, stuffed shape: filled, shaded round like something puffy (light from
+// the upper left), felt-fuzzy, and outlined in a darker thread of its own colour.
+function puff(ctx, shape, color, { glow = 0.45, shade = 0.3, line, width = 4.5, fuzz = 1, seed = 1 } = {}) {
+  const { x, y, w, h } = shape.box
+  ctx.save()
+  shape.path(ctx)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.clip()
+  const g = ctx.createRadialGradient(x + w * 0.34, y + h * 0.28, Math.min(w, h) * 0.04, x + w * 0.52, y + h * 0.56, Math.max(w, h) * 0.74)
+  g.addColorStop(0, `rgba(255, 255, 255, ${glow})`)
+  g.addColorStop(0.42, 'rgba(255, 255, 255, 0)')
+  g.addColorStop(1, `rgba(45, 20, 35, ${shade})`)
+  ctx.fillStyle = g
+  ctx.fillRect(x - 6, y - 6, w + 12, h + 12)
+  if (fuzz) {
+    const r = rng(seed * 131 + Math.round(x + y))
+    const n = Math.round(((w * h) / 70) * fuzz)
+    ctx.lineCap = 'round'
+    for (let i = 0; i < n; i++) {
+      const px = x + r() * w
+      const py = y + r() * h
+      const a = r() * Math.PI
+      const l = 2 + r() * 4
+      ctx.strokeStyle = r() < 0.5 ? `rgba(255, 255, 255, ${0.08 + r() * 0.14})` : `rgba(40, 20, 30, ${0.06 + r() * 0.1})`
+      ctx.lineWidth = 1 + r()
+      ctx.beginPath()
+      ctx.moveTo(px, py)
+      ctx.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l)
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+  if (width) {
+    shape.path(ctx)
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = width
+    ctx.strokeStyle = line ?? darker(color, 0.5)
+    ctx.stroke()
+  }
+}
+// running stitches along a seam
+function stitch(ctx, draw, color = 'rgba(255, 248, 236, 0.85)', width = 2.6) {
   ctx.save()
   ctx.setLineDash([7, 6])
   ctx.lineCap = 'round'
   ctx.strokeStyle = color
   ctx.lineWidth = width
   ctx.beginPath()
-  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+  draw(ctx)
   ctx.stroke()
   ctx.restore()
 }
-const arc = (cx, cy, rx, ry, a0, a1, n = 12) =>
-  Array.from({ length: n + 1 }, (_, i) => {
-    const a = a0 + ((a1 - a0) * i) / n
-    return [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]
+// a shiny black button eye
+function eye(ctx, x, y, r) {
+  ctx.save()
+  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r * 1.1)
+  g.addColorStop(0, '#514856')
+  g.addColorStop(1, '#120e16')
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.ellipse(x, y, r, r * 1.08, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.ellipse(x - r * 0.3, y - r * 0.36, r * 0.34, r * 0.28, -0.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalAlpha = 0.8
+  ctx.beginPath()
+  ctx.arc(x + r * 0.34, y + r * 0.34, r * 0.14, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+function blush(ctx, x, y, rx = 24, ry = 14, color = '255, 140, 160') {
+  const g = ctx.createRadialGradient(x, y, 1, x, y, rx)
+  g.addColorStop(0, `rgba(${color}, 0.62)`)
+  g.addColorStop(1, `rgba(${color}, 0)`)
+  ctx.save()
+  ctx.fillStyle = g
+  ctx.beginPath()
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+// a little "w" of a mouth
+function mouth(ctx, x, y, w, color = '#4a2a2e', width = 3.5) {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = width
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.arc(x - w / 2, y, w / 2, 0.15 * Math.PI, 0.85 * Math.PI)
+  ctx.moveTo(x + w, y)
+  ctx.arc(x + w / 2, y, w / 2, 0.15 * Math.PI, 0.85 * Math.PI)
+  ctx.stroke()
+  ctx.restore()
+}
+// a thick, soft tail along a path (the chameleon's curl, the kitten's)
+function tail(ctx, pts, color, width) {
+  const line = (w, c) => {
+    ctx.save()
+    ctx.lineCap = ctx.lineJoin = 'round'
+    ctx.strokeStyle = c
+    ctx.lineWidth = w
+    ctx.beginPath()
+    // a smooth curve through the points
+    ctx.moveTo(pts[0][0], pts[0][1])
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)]
+      const p1 = pts[i]
+      const p2 = pts[i + 1]
+      const p3 = pts[Math.min(pts.length - 1, i + 2)]
+      ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1])
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+  line(width + 9, darker(color, 0.5))
+  line(width, color)
+  ctx.save()
+  ctx.translate(-width * 0.12, -width * 0.14)
+  line(width * 0.3, 'rgba(255, 255, 255, 0.22)')
+  ctx.restore()
+}
+
+// The heist crew's outfit: a dark felt tunic, a scarf, a satchel on a strap, a belt.
+const FELT = '#4b4556'
+function outfit(ctx, skin, paw, seed) {
+  // arms first, so the tunic sits over their tops
+  for (const side of [-1, 1]) {
+    puff(ctx, oval(260 + side * 132, 432, 40, 64, side * 0.55), skin, { seed })
+    puff(ctx, oval(260 + side * 156, 476, 26, 22), paw, { seed, glow: 0.3 })
+  }
+  for (const side of [-1, 1]) {
+    puff(ctx, oval(260 + side * 58, 560, 54, 30), paw, { seed, glow: 0.35 })
+    puff(ctx, oval(260 + side * 58, 566, 26, 13), lighter(paw, 0.35), { seed, width: 2.5, fuzz: 0 })
+  }
+  puff(ctx, oval(260, 450, 138, 118), FELT, { seed, glow: 0.35, shade: 0.35 })
+  stitch(ctx, (c) => c.ellipse(260, 450, 116, 98, 0, 0.25 * Math.PI, 0.75 * Math.PI), 'rgba(255, 255, 255, 0.35)')
+  // belt
+  ctx.save()
+  oval(260, 450, 138, 118).path(ctx)
+  ctx.clip()
+  ctx.fillStyle = '#6d4a33'
+  ctx.fillRect(110, 486, 300, 26)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.18)'
+  ctx.fillRect(110, 486, 300, 6)
+  ctx.restore()
+  puff(ctx, curve([[236, 484], [284, 484], [284, 514], [236, 514]]), '#e9d6a8', { seed, width: 3, fuzz: 0 })
+  // the strap, across, and the satchel on the hip
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = darker('#8a5a3b', 0.4)
+  ctx.lineWidth = 22
+  ctx.beginPath()
+  ctx.moveTo(176, 360)
+  ctx.lineTo(352, 492)
+  ctx.stroke()
+  ctx.strokeStyle = '#8a5a3b'
+  ctx.lineWidth = 15
+  ctx.stroke()
+  ctx.restore()
+  puff(ctx, curve([[322, 470], [408, 466], [414, 540], [326, 546]]), '#94603f', { seed })
+  puff(ctx, curve([[318, 468], [412, 462], [406, 500], [324, 506]]), '#a8714b', { seed, width: 3.5 })
+  puff(ctx, oval(366, 500, 9, 9), '#e9d6a8', { seed, width: 2.5, fuzz: 0 })
+  // the scarf, wrapped round the neck, its end hanging
+  puff(ctx, curve([[130, 342], [260, 372], [390, 342], [392, 382], [260, 404], [128, 382]]), '#63597a', { seed })
+  puff(ctx, curve([[152, 380], [192, 386], [184, 448], [146, 440]]), '#63597a', { seed })
+  stitch(ctx, (c) => {
+    c.moveTo(150, 372)
+    c.quadraticCurveTo(260, 398, 370, 372)
   })
-// big shiny button eyes
-function eyes(m, ctx, xs, y, r = 15, ring = null) {
-  for (const x of xs) {
-    if (ring) m.blob(x, y, r + 8, r + 9, ring, { width: 3 })
-    m.blob(x, y, r, r * 1.1, '#1d1a22', { width: 3 })
-    ctx.fillStyle = '#ffffff'
-    ctx.beginPath()
-    ctx.arc(x - r * 0.32, y - r * 0.38, r * 0.3, 0, Math.PI * 2)
-    ctx.fill()
-  }
-}
-function cheeks(ctx, xs, y, color = 'rgba(236, 130, 140, 0.45)') {
-  ctx.fillStyle = color
-  for (const x of xs) {
-    ctx.beginPath()
-    ctx.ellipse(x, y, 15, 9, 0, 0, Math.PI * 2)
-    ctx.fill()
-  }
-}
-// the heist crew's outfit: a round dark body, a scarf, a satchel across it
-function crewBody(m, ctx, skin, { tail } = {}) {
-  tail?.()
-  m.blob(100, 318, 30, 24, skin) // arms
-  m.blob(260, 318, 30, 24, skin)
-  m.blob(144, 392, 30, 18, OUTFIT) // feet
-  m.blob(216, 392, 30, 18, OUTFIT)
-  m.blob(180, 322, 86, 76, OUTFIT)
-  stitches(ctx, arc(180, 322, 70, 60, 0.3, 2.84))
-  m.line([[116, 270], [238, 362]], { width: 10, color: STRAP })
-  m.rect(222, 338, 54, 42, STRAP, { width: 4 })
-  m.line([[226, 352], [272, 352]], { width: 3, color: '#4e3322' })
-  m.shape([[104, 246], [256, 246], [240, 280], [120, 280]], '#2c2a33') // the scarf
 }
 
 export const PLUSH = {
-  // grey with a dark mask, a cream face, pointed ears, a striped tail
+  // grey, a dark mask, cream face and brows, a big ringed tail
   raccoon(seed = 1) {
-    const c = canvas(360, 420)
+    const c = canvas(520, 600)
     const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: INK })
-    const grey = '#928c88'
-    const dark = '#4d4240'
-    const cream = '#eee4d6'
-    crewBody(m, ctx, grey, {
-      tail() {
-        // a fat, fluffy tail, ringed dark
-        const tail = [[228, 352], [276, 356], [320, 330], [348, 282], [354, 226], [334, 206], [306, 216], [300, 264], [278, 300], [240, 318]]
-        m.shape(tail, grey)
-        ctx.save()
-        ctx.beginPath()
-        tail.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
-        ctx.closePath()
-        ctx.clip()
-        ctx.fillStyle = dark
-        for (const [x, y, a] of [[300, 330, 0.9], [328, 288, 0.4], [336, 238, 0.05]]) {
-          ctx.save()
-          ctx.translate(x, y)
-          ctx.rotate(a)
-          ctx.fillRect(-60, -9, 120, 18)
-          ctx.restore()
-        }
-        ctx.restore()
-        m.shape(tail, null)
-      },
-    })
-    m.shape([[96, 124], [104, 44], [164, 96]], grey) // ears
-    m.shape([[264, 124], [256, 44], [196, 96]], grey)
-    m.shape([[112, 104], [114, 66], [146, 96]], cream, { width: 3 })
-    m.shape([[248, 104], [246, 66], [214, 96]], cream, { width: 3 })
-    m.blob(180, 156, 104, 94, grey) // head
-    m.shape([[96, 176], [130, 210], [180, 236], [230, 210], [264, 176], [236, 196], [180, 206], [124, 196]], cream, { width: 3 }) // muzzle
-    m.shape([[110, 120], [180, 132], [250, 120], [230, 104], [180, 112], [130, 104]], cream, { width: 3 }) // brows
-    m.blob(136, 160, 36, 26, dark, { width: 3 }) // the mask
-    m.blob(224, 160, 36, 26, dark, { width: 3 })
-    eyes(m, ctx, [138, 222], 160, 14)
-    m.blob(180, 196, 13, 9, '#1d1a22', { width: 3 })
-    m.line([[170, 214], [180, 220], [190, 214]], { width: 3 })
-    stitches(ctx, [[180, 64], [180, 104]])
-    fibres(ctx)
-    return c
-  },
-
-  // green, in a dark hood with a crest poking up, big eyes, a curled tail
-  chameleon(seed = 1) {
-    const c = canvas(360, 420)
-    const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: INK })
-    const green = '#7fa483'
-    const light = '#a8c79a'
-    crewBody(m, ctx, green, {
-      tail() {
-        m.shape([[240, 360], [300, 350], [334, 312], [330, 276], [300, 268], [284, 292], [300, 312], [276, 330]], green)
-        m.blob(304, 292, 14, 13, light, { width: 3 })
-      },
-    })
-    m.shape([[166, 70], [180, 30], [196, 56], [204, 40], [210, 74]], green, { width: 4 }) // the crest
-    m.blob(180, 156, 106, 98, OUTFIT) // the hood
-    m.blob(180, 170, 78, 70, green) // the face inside it
-    m.shape([[118, 196], [180, 214], [242, 196], [224, 226], [180, 236], [136, 226]], light, { width: 3 })
-    eyes(m, ctx, [146, 214], 160, 17, '#e9d6b4')
-    m.line([[150, 210], [180, 218], [210, 210]], { width: 3 })
-    stitches(ctx, arc(180, 156, 92, 84, Math.PI * 1.08, Math.PI * 1.92), 'rgba(255, 250, 238, 0.55)')
-    fibres(ctx)
-    return c
-  },
-
-  // orange and cream, round ears, flying goggles pushed up on its head
-  hamster(seed = 1) {
-    const c = canvas(360, 420)
-    const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: INK })
-    const orange = '#d48b55'
-    const cream = '#f3dfc6'
-    crewBody(m, ctx, orange)
-    for (const x of [96, 264]) {
-      m.blob(x, 92, 34, 32, orange)
-      m.blob(x, 94, 20, 18, '#eab097', { width: 3 })
-    }
-    m.blob(180, 160, 104, 92, orange)
-    m.shape([[110, 170], [140, 136], [180, 128], [220, 136], [250, 170], [244, 220], [180, 246], [116, 220]], cream, { width: 3 })
-    m.shape([[86, 108], [274, 108], [268, 132], [92, 132]], '#3a3640', { width: 4 }) // goggle strap
-    for (const x of [136, 224]) {
-      m.blob(x, 106, 34, 28, '#3a3640', { width: 4 })
-      m.blob(x, 106, 22, 17, '#8ea3b4', { width: 3 })
-    }
-    eyes(m, ctx, [146, 214], 176, 14)
-    m.blob(180, 204, 9, 7, '#e88e8e', { width: 3 })
-    m.line([[168, 216], [180, 222], [192, 216]], { width: 3 })
-    cheeks(ctx, [122, 238], 206)
-    fibres(ctx)
-    return c
-  },
-
-  // a patchwork caterpillar: a cream head with a sprout, a button, blushing;
-  // segments of blue with a flower, pink gingham, lilac
-  blob(seed = 1) {
-    const c = canvas(460, 300)
-    const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: INK })
-    m.blob(76, 206, 54, 52, '#b49cc9')
-    stitches(ctx, arc(76, 206, 40, 38, -1.2, 1.4))
-    m.blob(150, 192, 66, 64, '#eeb1ad')
+    const grey = '#9e9893'
+    const dark = '#504543'
+    const cream = '#f1e7da'
+    const tailShape = curve([[300, 500], [380, 522], [456, 474], [498, 380], [492, 282], [458, 230], [426, 258], [440, 330], [420, 410], [362, 452]])
+    puff(ctx, tailShape, grey, { seed })
     ctx.save()
-    ctx.beginPath()
-    oval(150, 192, 62, 60).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
-    ctx.closePath()
+    tailShape.path(ctx)
     ctx.clip()
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)'
-    for (let x = 84; x < 220; x += 24) ctx.fillRect(x, 120, 11, 150)
-    for (let y = 126; y < 260; y += 24) ctx.fillRect(80, y, 150, 11)
-    ctx.restore()
-    m.blob(236, 182, 74, 72, '#a9c3df')
-    const petals = [0, 1, 2, 3, 4].map((k) => [236 + Math.cos(k * 1.257) * 15, 170 + Math.sin(k * 1.257) * 15])
-    for (const [x, y] of petals) m.blob(x, y, 11, 11, '#fbf7ee', { width: 2 })
-    m.blob(236, 170, 7, 7, '#f0c55a', { width: 2 })
-    stitches(ctx, arc(236, 182, 60, 58, 0.4, 2.6))
-    m.blob(342, 150, 92, 88, '#f1e4cd') // the head
-    m.shape([[334, 66], [312, 30], [286, 40], [326, 70]], '#8fae6e', { width: 4 }) // the sprout
-    m.shape([[346, 66], [374, 28], [398, 44], [352, 72]], '#9cbb79', { width: 4 })
-    m.line([[340, 72], [342, 60]], { width: 4, color: '#6f8f55' })
-    m.blob(270, 128, 22, 22, '#9b7a5e', { width: 3 }) // the button
-    m.line([[262, 120], [278, 136]], { width: 3 })
-    m.line([[278, 120], [262, 136]], { width: 3 })
-    eyes(m, ctx, [330, 392], 150, 13)
-    cheeks(ctx, [306, 410], 182)
-    m.line([[350, 178], [362, 184], [374, 178]], { width: 3 })
-    stitches(ctx, arc(342, 150, 76, 72, 3.6, 5.6), 'rgba(160, 120, 90, 0.6)')
-    fibres(ctx)
-    return c
-  },
-
-  // a round yellow duck in its little brown boat
-  duck(seed = 1) {
-    const c = canvas(380, 380)
-    const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: INK })
-    m.blob(190, 196, 120, 112, '#f1c84c')
-    m.blob(186, 108, 76, 72, '#f1c84c') // the head
-    m.blob(116, 228, 30, 46, '#e6b43b', { width: 4 }) // a wing
-    m.shape([[150, 128], [222, 128], [212, 158], [160, 158]], '#ee8a3a') // the beak
-    m.line([[160, 142], [212, 142]], { width: 3 })
-    eyes(m, ctx, [154, 218], 96, 11)
-    m.shape([[50, 262], [330, 262], [306, 336], [74, 336]], '#5c3b2a') // the boat
-    m.line([[70, 292], [310, 292]], { width: 3, color: '#8a5a3e' })
-    stitches(ctx, arc(190, 196, 104, 96, 0.4, 2.7), 'rgba(160, 110, 30, 0.55)')
-    for (let x = 40; x < 340; x += 52) m.line([[x, 352], [x + 18, 344], [x + 36, 352]], { width: 4, color: '#4f7fc4' })
-    fibres(ctx)
-    return c
-  },
-
-  // a black kitten with a white chest and paws, yellow eyes with lightning in them
-  kitten(seed = 1) {
-    const c = canvas(360, 420)
-    const ctx = c.getContext('2d')
-    const m = marker(ctx, seed, { width: 5, wobble: 1.3, color: '#141218' })
-    const black = '#2b2a31'
-    m.shape([[250, 360], [306, 330], [330, 270], [318, 236], [300, 250], [304, 296], [262, 330]], black) // the tail
-    m.blob(180, 316, 84, 82, black)
-    m.shape([[150, 262], [210, 262], [226, 330], [180, 372], [134, 330]], '#f4f1ea', { width: 4 }) // white chest
-    m.blob(140, 392, 28, 16, '#f4f1ea')
-    m.blob(220, 392, 28, 16, '#f4f1ea')
-    m.shape([[94, 128], [100, 40], [160, 94]], black) // ears
-    m.shape([[266, 128], [260, 40], [200, 94]], black)
-    m.shape([[110, 106], [112, 66], [144, 98]], '#e8a4b0', { width: 3 })
-    m.shape([[250, 106], [248, 66], [216, 98]], '#e8a4b0', { width: 3 })
-    m.blob(180, 160, 102, 92, black)
-    m.shape([[140, 196], [180, 182], [220, 196], [208, 228], [180, 238], [152, 228]], '#f4f1ea', { width: 3 }) // muzzle
-    for (const x of [136, 224]) {
-      m.blob(x, 154, 24, 24, '#f4cf3a', { width: 3 })
-      m.shape([[x + 4, 136], [x - 8, 156], [x + 2, 156], [x - 4, 174], [x + 10, 150], [x, 150]], '#141218', { width: 2 }) // the lightning
+    ctx.fillStyle = dark
+    for (const [x, y, a] of [[392, 492, 0.75], [452, 418, 0.3], [470, 336, 0.05]]) {
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(a)
+      ctx.fillRect(-90, -16, 180, 32)
+      ctx.restore()
     }
-    m.blob(180, 196, 9, 7, '#e88e9a', { width: 3 })
-    m.line([[168, 210], [180, 216], [192, 210]], { width: 3, color: '#f4f1ea' })
-    stitches(ctx, [[180, 76], [180, 108]], 'rgba(255, 255, 255, 0.45)')
+    ctx.beginPath()
+    ctx.ellipse(462, 238, 46, 36, 0.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+    tailShape.path(ctx)
+    ctx.lineWidth = 4.5
+    ctx.strokeStyle = darker(grey, 0.5)
+    ctx.stroke()
+    outfit(ctx, grey, dark, seed)
+    for (const side of [-1, 1]) {
+      puff(ctx, curve([[260 + side * 140, 150], [260 + side * 118, 36], [260 + side * 50, 92]]), grey, { seed })
+      puff(ctx, curve([[260 + side * 128, 136], [260 + side * 116, 66], [260 + side * 74, 104]]), cream, { seed, width: 3 })
+    }
+    puff(ctx, oval(260, 218, 184, 156), grey, { seed })
+    puff(ctx, oval(260, 292, 98, 62), cream, { seed, width: 3.5 })
+    for (const side of [-1, 1]) puff(ctx, oval(260 + side * 76, 168, 54, 22, side * 0.2), cream, { seed, width: 3 })
+    puff(ctx, curve([[108, 232], [150, 192], [214, 198], [260, 226], [306, 198], [370, 192], [412, 232], [372, 270], [306, 262], [260, 246], [214, 262], [148, 270]]), dark, { seed, glow: 0.25 })
+    eye(ctx, 196, 230, 25)
+    eye(ctx, 324, 230, 25)
+    puff(ctx, curve([[236, 264], [284, 264], [260, 290]]), '#2a2026', { seed, width: 2.5, fuzz: 0 })
+    mouth(ctx, 260, 300, 18)
+    blush(ctx, 168, 296)
+    blush(ctx, 352, 296)
+    stitch(ctx, (k) => {
+      k.moveTo(260, 64)
+      k.lineTo(260, 120)
+    })
+    fibres(ctx)
+    return c
+  },
+
+  // green, in a dark hood with its crest poking out, big ringed eyes, a curled tail
+  chameleon(seed = 1) {
+    const c = canvas(520, 600)
+    const ctx = c.getContext('2d')
+    const green = '#86b38b'
+    const pale = '#b9d8a6'
+    tail(ctx, [[330, 500], [400, 512], [458, 486], [486, 440], [480, 392], [448, 368], [418, 380], [412, 410], [432, 426], [452, 414]], green, 44)
+    outfit(ctx, green, pale, seed)
+    puff(ctx, curve([[232, 66], [246, 18], [262, 54], [280, 12], [294, 56], [314, 28], [318, 84]]), green, { seed, width: 3.5 })
+    puff(ctx, curve([[88, 262], [98, 150], [160, 76], [260, 50], [360, 76], [422, 150], [432, 262], [402, 340], [260, 370], [118, 340]]), '#433d50', { seed, glow: 0.3 })
+    puff(ctx, oval(260, 240, 128, 110), green, { seed })
+    puff(ctx, oval(260, 300, 86, 38), pale, { seed, width: 3 })
+    for (const x of [204, 316]) {
+      puff(ctx, oval(x, 220, 48, 46), '#f2e3c3', { seed, width: 4 })
+      eye(ctx, x, 222, 27)
+    }
+    ctx.save()
+    ctx.strokeStyle = darker(green, 0.55)
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(212, 296)
+    ctx.quadraticCurveTo(260, 320, 308, 296)
+    ctx.stroke()
+    ctx.restore()
+    blush(ctx, 168, 290, 20, 12)
+    blush(ctx, 352, 290, 20, 12)
+    stitch(ctx, (k) => k.ellipse(260, 236, 140, 122, 0, 1.1 * Math.PI, 1.9 * Math.PI), 'rgba(255, 255, 255, 0.4)')
+    fibres(ctx)
+    return c
+  },
+
+  // orange and cream, round ears, flying goggles pushed up on its head, puffy cheeks
+  hamster(seed = 1) {
+    const c = canvas(520, 600)
+    const ctx = c.getContext('2d')
+    const orange = '#dd9b64'
+    const cream = '#f7e5cd'
+    outfit(ctx, orange, cream, seed)
+    for (const side of [-1, 1]) {
+      puff(ctx, oval(260 + side * 104, 92, 50, 48), orange, { seed })
+      puff(ctx, oval(260 + side * 104, 96, 28, 26), '#f2b3a8', { seed, width: 3 })
+    }
+    puff(ctx, oval(260, 222, 180, 156), orange, { seed })
+    puff(ctx, curve([[150, 236], [196, 196], [260, 186], [324, 196], [370, 236], [380, 300], [320, 350], [260, 360], [200, 350], [140, 300]]), cream, { seed, width: 3.5 })
+    // the goggles' strap, round the head
+    ctx.save()
+    oval(260, 222, 180, 156).path(ctx)
+    ctx.clip()
+    puff(ctx, curve([[60, 140], [460, 140], [460, 180], [60, 180]]), '#3e3a47', { seed, width: 3.5, glow: 0.2 })
+    ctx.restore()
+    for (const x of [192, 328]) {
+      puff(ctx, oval(x, 150, 48, 46), '#3e3a47', { seed, glow: 0.25 })
+      puff(ctx, oval(x, 150, 31, 30), '#9cc4d8', { seed, width: 3, glow: 0.7 })
+    }
+    eye(ctx, 204, 252, 21)
+    eye(ctx, 316, 252, 21)
+    puff(ctx, curve([[246, 282], [274, 282], [260, 298]]), '#ef9a9a', { seed, width: 2.5, fuzz: 0 })
+    mouth(ctx, 260, 306, 15)
+    blush(ctx, 160, 300, 30, 18)
+    blush(ctx, 360, 300, 30, 18)
+    fibres(ctx)
+    return c
+  },
+
+  // a patchwork caterpillar: lilac, pink gingham, blue with a flower; a cream
+  // head with a sprout, a button, rosy cheeks
+  blob(seed = 1) {
+    const c = canvas(660, 460)
+    const ctx = c.getContext('2d')
+    const segments = [
+      [120, 322, 80, 76, '#bba5d6'],
+      [226, 306, 94, 90, '#f1b2ae'],
+      [348, 290, 104, 100, '#abc8e8'],
+    ]
+    for (const [x] of segments) puff(ctx, oval(x + 8, 404, 28, 18), '#f6ead8', { seed, glow: 0.3 })
+    segments.forEach(([x, y, rx, ry, col], i) => {
+      const shape = oval(x, y, rx, ry)
+      puff(ctx, shape, col, { seed })
+      if (i === 1) {
+        // gingham
+        ctx.save()
+        shape.path(ctx)
+        ctx.clip()
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+        for (let gx = x - rx; gx < x + rx; gx += 26) ctx.fillRect(gx, y - ry, 12, ry * 2)
+        for (let gy = y - ry; gy < y + ry; gy += 26) ctx.fillRect(x - rx, gy, rx * 2, 12)
+        ctx.restore()
+        shape.path(ctx)
+        ctx.lineWidth = 4.5
+        ctx.strokeStyle = darker(col, 0.5)
+        ctx.stroke()
+      }
+      if (i === 2) {
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * Math.PI * 2 - Math.PI / 2
+          puff(ctx, oval(x + 4 + Math.cos(a) * 18, y - 20 + Math.sin(a) * 18, 15, 12, a), '#fffaf0', { seed, width: 2.5, fuzz: 0 })
+        }
+        puff(ctx, oval(x + 4, y - 20, 9, 9), '#f2c75c', { seed, width: 2, fuzz: 0 })
+      }
+      stitch(ctx, (k) => k.ellipse(x, y, rx - 12, ry - 12, 0, -0.35 * Math.PI, 0.35 * Math.PI))
+    })
+    // the head
+    ctx.save()
+    ctx.strokeStyle = '#6f8f55'
+    ctx.lineWidth = 7
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(500, 118)
+    ctx.quadraticCurveTo(504, 96, 498, 78)
+    ctx.stroke()
+    ctx.restore()
+    puff(ctx, curve([[498, 84], [456, 44], [420, 56], [440, 92]]), '#94b973', { seed, width: 3.5 })
+    puff(ctx, curve([[502, 84], [548, 36], [586, 54], [552, 96]]), '#a6c886', { seed, width: 3.5 })
+    puff(ctx, oval(500, 244, 132, 124), '#f4e9d6', { seed })
+    puff(ctx, oval(392, 196, 32, 32), '#a5805f', { seed, width: 3.5 })
+    ctx.save()
+    ctx.strokeStyle = '#3d2a20'
+    ctx.lineWidth = 4
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(380, 184)
+    ctx.lineTo(404, 208)
+    ctx.moveTo(404, 184)
+    ctx.lineTo(380, 208)
+    ctx.stroke()
+    ctx.restore()
+    eye(ctx, 476, 246, 21)
+    eye(ctx, 562, 246, 21)
+    blush(ctx, 436, 290, 26, 15)
+    blush(ctx, 600, 290, 22, 14)
+    mouth(ctx, 520, 290, 16)
+    stitch(ctx, (k) => k.ellipse(500, 244, 114, 106, 0, 1.15 * Math.PI, 1.85 * Math.PI), 'rgba(160, 120, 90, 0.55)')
+    fibres(ctx)
+    return c
+  },
+
+  // a round yellow duck, sitting in its little wooden boat
+  duck(seed = 1) {
+    const c = canvas(560, 540)
+    const ctx = c.getContext('2d')
+    const yellow = '#f8d05a'
+    puff(ctx, oval(280, 342, 176, 122), yellow, { seed })
+    puff(ctx, oval(184, 344, 64, 46, -0.35), '#f1c04a', { seed })
+    puff(ctx, curve([[264, 66], [282, 40], [300, 66], [318, 50], [312, 86]]), yellow, { seed, width: 3.5 })
+    puff(ctx, oval(286, 190, 124, 114), yellow, { seed })
+    eye(ctx, 246, 178, 19)
+    eye(ctx, 326, 178, 19)
+    puff(ctx, curve([[236, 214], [336, 214], [344, 240], [286, 266], [228, 240]]), '#f59a47', { seed, width: 4 })
+    ctx.save()
+    ctx.strokeStyle = darker('#f59a47', 0.45)
+    ctx.lineWidth = 3
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(244, 234)
+    ctx.quadraticCurveTo(286, 246, 328, 234)
+    ctx.stroke()
+    ctx.restore()
+    blush(ctx, 206, 222, 24, 14)
+    blush(ctx, 366, 222, 24, 14)
+    // the boat
+    puff(ctx, curve([[52, 398], [508, 398], [470, 498], [94, 498]]), '#8a5a3c', { seed, glow: 0.3 })
+    puff(ctx, curve([[44, 392], [516, 392], [510, 424], [50, 424]]), '#b07a52', { seed, width: 4 })
+    ctx.save()
+    ctx.strokeStyle = 'rgba(60, 35, 20, 0.45)'
+    ctx.lineWidth = 3
+    for (const y of [452, 476]) {
+      ctx.beginPath()
+      ctx.moveTo(84 + (y - 440) * 0.4, y)
+      ctx.lineTo(476 - (y - 440) * 0.4, y)
+      ctx.stroke()
+    }
+    ctx.strokeStyle = '#7fb0e6'
+    ctx.lineWidth = 6
+    ctx.lineCap = 'round'
+    for (let x = 60; x < 520; x += 70) {
+      ctx.beginPath()
+      ctx.arc(x + 18, 528, 18, 1.15 * Math.PI, 1.85 * Math.PI)
+      ctx.stroke()
+    }
+    ctx.restore()
+    fibres(ctx)
+    return c
+  },
+
+  // a black kitten: white chest, muzzle and paws, yellow eyes with lightning in them
+  kitten(seed = 1) {
+    const c = canvas(520, 600)
+    const ctx = c.getContext('2d')
+    const black = '#3a3942'
+    const white = '#f8f4ed'
+    tail(ctx, [[330, 510], [404, 500], [452, 452], [462, 380], [446, 326], [426, 300]], black, 40)
+    for (const side of [-1, 1]) {
+      puff(ctx, oval(260 + side * 132, 432, 40, 64, side * 0.55), black, { seed, glow: 0.3 })
+      puff(ctx, oval(260 + side * 156, 476, 26, 22), white, { seed })
+    }
+    for (const side of [-1, 1]) puff(ctx, oval(260 + side * 58, 560, 54, 30), white, { seed })
+    puff(ctx, oval(260, 452, 136, 118), black, { seed, glow: 0.3 })
+    puff(ctx, curve([[206, 346], [314, 346], [336, 434], [260, 512], [184, 434]]), white, { seed, width: 3.5 })
+    for (const side of [-1, 1]) {
+      puff(ctx, curve([[260 + side * 150, 160], [260 + side * 136, 30], [260 + side * 48, 96]]), black, { seed, glow: 0.3 })
+      puff(ctx, curve([[260 + side * 136, 142], [260 + side * 128, 62], [260 + side * 74, 106]]), '#efa6b2', { seed, width: 3 })
+    }
+    puff(ctx, oval(260, 222, 182, 156), black, { seed, glow: 0.32 })
+    puff(ctx, curve([[198, 276], [228, 252], [260, 262], [292, 252], [322, 276], [314, 320], [260, 338], [206, 320]]), white, { seed, width: 3.5 })
+    for (const x of [188, 332]) {
+      puff(ctx, oval(x, 214, 42, 42), '#f7d33f', { seed, width: 4, glow: 0.55 })
+      puff(ctx, curve([[x + 8, 182], [x - 14, 218], [x + 2, 218], [x - 10, 248], [x + 16, 208], [x, 208]]), '#1c1820', { seed, width: 0, fuzz: 0 })
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.arc(x - 16, 198, 7, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    puff(ctx, curve([[248, 276], [272, 276], [260, 290]]), '#ef9aa8', { seed, width: 2.5, fuzz: 0 })
+    mouth(ctx, 260, 298, 14)
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)'
+    ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'
+    for (const side of [-1, 1])
+      for (const dy of [-8, 6]) {
+        ctx.beginPath()
+        ctx.moveTo(260 + side * 70, 292 + dy)
+        ctx.lineTo(260 + side * 132, 284 + dy * 1.8)
+        ctx.stroke()
+      }
+    ctx.restore()
+    blush(ctx, 198, 300, 18, 10)
+    blush(ctx, 322, 300, 18, 10)
     fibres(ctx)
     return c
   },
 }
 
 // ------------------------------------------------------------------ the machine
-
+// Painted card in sweet-shop colours, its cut edges showing the corrugation.
+const MINT = '#93d8ca'
+const PINK = '#f6a9bd'
+const CREAM = '#fff4de'
+const LINE = '#2f5752'
 const KRAFT = '#c69b6d'
-const KRAFT_DARK = '#8d6440'
 
-// The marquee across the top: card, hand-lettered, with a hole cut for the screen.
+// rounded rectangle, filled and outlined
+function panel(ctx, x, y, w, h, r, fill, { line = LINE, width = 5, glow = 0.32 } = {}) {
+  const shape = {
+    path(c) {
+      c.beginPath()
+      c.roundRect(x, y, w, h, r)
+    },
+    box: { x, y, w, h },
+  }
+  puff(ctx, shape, fill, { line, width, glow, shade: 0.18, fuzz: 0.25 })
+}
+// a strip of card's cut edge: kraft, with the corrugation's wave inside
+function cutEdge(ctx, x, y, w, h) {
+  ctx.save()
+  ctx.fillStyle = KRAFT
+  ctx.fillRect(x, y, w, h)
+  ctx.strokeStyle = 'rgba(90, 60, 30, 0.55)'
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  for (let px = x; px <= x + w; px += 4) ctx.lineTo(px, y + h / 2 + Math.sin(px / 5) * (h * 0.32))
+  ctx.stroke()
+  ctx.restore()
+}
+// a glossy round button
+function gloss(ctx, x, y, r, color) {
+  puff(ctx, oval(x, y + r * 0.18, r * 1.12, r * 0.9), darker(color, 0.35), { width: 4, line: LINE, fuzz: 0, glow: 0.1 })
+  puff(ctx, oval(x, y, r, r * 0.82), color, { width: 4, line: LINE, fuzz: 0, glow: 0.6 })
+  ctx.save()
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
+  ctx.beginPath()
+  ctx.ellipse(x - r * 0.35, y - r * 0.3, r * 0.3, r * 0.16, -0.4, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+const heartShape = (x, y, s) =>
+  curve([[x, y + s * 0.95], [x - s * 0.95, y + s * 0.1], [x - s * 0.7, y - s * 0.6], [x - s * 0.15, y - s * 0.55], [x, y - s * 0.2], [x + s * 0.15, y - s * 0.55], [x + s * 0.7, y - s * 0.6], [x + s * 0.95, y + s * 0.1]])
+const starShape = (x, y, R) =>
+  curve(
+    Array.from({ length: 10 }, (_, i) => {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5
+      const r = i % 2 ? R * 0.48 : R
+      return [x + Math.cos(a) * r, y + Math.sin(a) * r]
+    }),
+  )
+
+// The marquee across the top: the sign, the screen's bezel (cut through), a banner.
 export function marquee(title, seed = 1) {
-  const c = canvas(2048, 200)
+  const c = canvas(2048, 212)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 7 })
-  m.rect(6, 6, 2036, 188, KRAFT)
-  for (let y = 20; y < 200; y += 15) {
-    ctx.fillStyle = 'rgba(80, 50, 20, 0.05)'
-    ctx.fillRect(0, y, 2048, 6)
-  }
-  m.rect(60, 40, 700, 120, '#f3e9d2', { width: 5 })
-  write(ctx, title, 410, 101, { size: 92, max: 640 })
-  m.rect(1290, 40, 700, 120, '#f3e9d2', { width: 5 })
-  write(ctx, '★ win a friend ★', 1640, 101, { size: 70, max: 640, color: '#b5523b' })
-  m.hole([[858, 26], [1190, 26], [1190, 174], [858, 174]]) // the screen shows through here
+  panel(ctx, 4, 4, 2040, 190, 26, MINT)
+  cutEdge(ctx, 10, 194, 2028, 14)
+  ctx.fillStyle = PINK
+  ctx.fillRect(30, 20, 1988, 8)
+  ctx.fillRect(30, 168, 1988, 8)
+  // the sign
+  panel(ctx, 640, 26, 768, 150, 75, CREAM, { width: 6 })
+  panel(ctx, 656, 40, 736, 122, 61, lighter(PINK, 0.55), { width: 3, line: PINK })
+  write(ctx, title, 1027, 106, { size: 96, max: 660, color: '#b04870', font: HAND, weight: 700 })
+  write(ctx, title, 1024, 102, { size: 96, max: 660, color: '#e2557f', font: HAND, weight: 700 })
+  for (const x of [604, 1444]) puff(ctx, heartShape(x, 100, 30), '#ef6f8f', { line: LINE, width: 4, fuzz: 0 })
+  // the screen's bezel, a rounded TV, with the screen cut right out
+  panel(ctx, 150, 22, 400, 160, 34, PINK, { width: 6 })
+  ctx.save()
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath()
+  ctx.roundRect(182, 40, 336, 124, 18)
+  ctx.fill()
+  ctx.restore()
+  ctx.strokeStyle = LINE
+  ctx.lineWidth = 5
+  ctx.beginPath()
+  ctx.roundRect(182, 40, 336, 124, 18)
+  ctx.stroke()
+  // a banner on the right
+  panel(ctx, 1540, 52, 380, 98, 49, '#ffe08a', { width: 5 })
+  write(ctx, '★ win a friend ★', 1730, 101, { size: 50, max: 330, color: '#c0542f', font: HAND, weight: 700 })
   fibres(ctx)
   return c
 }
 
-// The control panel along the bottom: a joystick, bottle-cap buttons, a coin
-// slot, and the prize door down on the left.
+// The control panel along the bottom: the prize door, a ball-top joystick,
+// two big buttons, a coin slot, stickers.
 export function controlPanel(seed = 1) {
-  const c = canvas(2048, 230)
+  const c = canvas(2048, 236)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 7 })
-  m.rect(6, 6, 2036, 218, KRAFT)
-  m.line([[6, 40], [2042, 40]], { width: 4, color: KRAFT_DARK })
-  m.rect(40, 62, 260, 150, '#2a1e16') // the prize door
-  m.rect(54, 76, 232, 40, '#f3e9d2', { width: 4 })
-  write(ctx, 'prizes', 170, 97, { size: 34, max: 200 })
-  m.blob(1020, 150, 46, 14, '#4a3d33', { width: 4 }) // joystick
-  m.shape([[1012, 150], [1028, 150], [1026, 92], [1014, 92]], P.tape, { width: 3 })
-  m.blob(1020, 80, 26, 24, '#d6553f', { width: 4 })
-  for (const [x, col] of [[1180, '#4f8c8a'], [1270, '#e2b53e']]) {
-    m.blob(x, 132, 34, 34, col, { width: 4 })
-    m.blob(x, 132, 21, 21, null, { width: 2 })
-  }
-  m.rect(1460, 92, 120, 80, '#a17c55', { width: 4 }) // the coin slot
-  m.rect(1508, 104, 24, 56, '#1b1510', { width: 3 })
-  write(ctx, 'insert coin', 1520, 196, { size: 26, max: 200 })
-  m.shape(star(1800, 128, 50, 0.45), '#e9d27a', { width: 4 })
+  cutEdge(ctx, 10, 0, 2028, 14)
+  panel(ctx, 4, 12, 2040, 220, 22, MINT)
+  panel(ctx, 20, 18, 2008, 34, 17, PINK, { width: 4 })
+  // the prize door
+  panel(ctx, 64, 70, 280, 150, 24, '#5d9e93', { width: 5 })
+  panel(ctx, 84, 86, 240, 64, 20, darker('#5d9e93', 0.45), { width: 4 })
+  panel(ctx, 120, 160, 168, 44, 22, CREAM, { width: 3.5 })
+  write(ctx, 'prize', 204, 183, { size: 34, max: 140, color: '#e2557f', font: HAND, weight: 700 })
+  // joystick
+  puff(ctx, oval(1000, 196, 72, 20), '#3f4a52', { line: LINE, width: 4, fuzz: 0 })
+  puff(ctx, curve([[990, 196], [1010, 196], [1008, 120], [992, 120]]), '#cfd6dc', { line: LINE, width: 4, fuzz: 0, glow: 0.6 })
+  gloss(ctx, 1000, 104, 38, '#ef4f5b')
+  // buttons
+  gloss(ctx, 1170, 152, 44, '#f48aa8')
+  gloss(ctx, 1290, 152, 44, '#ffd15e')
+  // coin slot
+  panel(ctx, 1430, 82, 150, 110, 18, '#d7dde2', { width: 4.5, glow: 0.6 })
+  panel(ctx, 1494, 96, 22, 62, 8, '#2a3036', { width: 3 })
+  write(ctx, 'insert coin', 1505, 176, { size: 24, max: 136, color: LINE, font: HAND, weight: 700 })
+  puff(ctx, oval(1640, 136, 34, 34), '#f2c75c', { line: '#8a6a1c', width: 4, fuzz: 0, glow: 0.6 })
+  write(ctx, '1', 1640, 138, { size: 34, color: '#8a6a1c', weight: 700 })
+  // stickers
+  puff(ctx, starShape(1790, 134, 46), '#ffe08a', { line: LINE, width: 4, fuzz: 0 })
+  puff(ctx, heartShape(1910, 130, 36), '#ef6f8f', { line: LINE, width: 4, fuzz: 0 })
   fibres(ctx)
   return c
 }
 
-// The inside of the machine, behind the toys: dark card scattered with marker stars.
+// a post either side of the window: mint, with a pink stripe and dots
+export function post(seed = 1) {
+  const c = canvas(96, 640)
+  const ctx = c.getContext('2d')
+  cutEdge(ctx, 0, 0, 8, 640)
+  cutEdge(ctx, 88, 0, 8, 640)
+  ctx.fillStyle = MINT
+  ctx.fillRect(8, 0, 80, 640)
+  ctx.fillStyle = PINK
+  ctx.fillRect(34, 0, 28, 640)
+  ctx.fillStyle = CREAM
+  for (let y = 24; y < 640; y += 48) {
+    ctx.beginPath()
+    ctx.arc(48, y, 7, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.strokeStyle = LINE
+  ctx.lineWidth = 4
+  ctx.strokeRect(8, -4, 80, 648)
+  fibres(ctx)
+  return c
+}
+
+// The inside of the machine, behind the toys: a soft sky, clouds, sparkles.
 export function machineInside(seed = 1) {
-  const c = canvas(1024, 256)
+  const c = canvas(1024, 512)
   const ctx = c.getContext('2d')
   const r = rng(seed * 7)
-  ctx.fillStyle = '#3b3358'
-  ctx.fillRect(0, 0, 1024, 256)
-  for (let i = 0; i < 2400; i++) {
-    ctx.fillStyle = `rgba(${r() < 0.5 ? '20,15,40' : '150,140,200'},${0.06 + r() * 0.1})`
-    ctx.fillRect(r() * 1024, r() * 256, 1 + r() * 2, 4 + r() * 10)
+  const g = ctx.createLinearGradient(0, 0, 0, 512)
+  g.addColorStop(0, '#cfc4f1')
+  g.addColorStop(0.55, '#f6cfe0')
+  g.addColorStop(1, '#ffe2cf')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, 1024, 512)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+  for (let i = 0; i < 6; i++) {
+    const x = r() * 1024
+    const y = 60 + r() * 200
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath()
+      ctx.ellipse(x + k * 34 - 50, y + Math.sin(k * 1.7) * 8, 40, 26, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
-  for (let i = 0; i < 26; i++) marker(ctx, i, { width: 3, color: '#f3e3a8' }).shape(star(r() * 1024, r() * 256, 7 + r() * 9, 0.45), null)
+  for (let i = 0; i < 40; i++) {
+    const x = r() * 1024
+    const y = r() * 512
+    const s = 4 + r() * 8
+    ctx.fillStyle = r() < 0.5 ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 224, 140, 0.85)'
+    ctx.beginPath()
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4
+      const rr = k % 2 ? s * 0.25 : s
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr)
+    }
+    ctx.closePath()
+    ctx.fill()
+  }
   return c
 }
 
-// The claw: its hub, and one of its prongs (the room makes three of these).
-export function clawHub(seed = 1) {
-  const c = canvas(160, 140)
+// the window's sheen: soft streaks of light across clear cellophane
+export function glassSheen() {
+  const c = canvas(1024, 256)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 5 })
-  m.rect(60, 6, 40, 40, '#9aa0aa')
-  m.shape([[20, 44], [140, 44], [124, 130], [36, 130]], '#c3c8d0')
-  m.line([[40, 88], [120, 88]], { width: 3, color: '#7d838e' })
+  for (const [x, w, a] of [[180, 90, 0.22], [300, 30, 0.16], [760, 60, 0.14]]) {
+    ctx.save()
+    ctx.translate(x, 128)
+    ctx.rotate(0.5)
+    const g = ctx.createLinearGradient(-w, 0, w, 0)
+    g.addColorStop(0, 'rgba(255, 255, 255, 0)')
+    g.addColorStop(0.5, `rgba(255, 255, 255, ${a})`)
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.fillStyle = g
+    ctx.fillRect(-w, -300, w * 2, 600)
+    ctx.restore()
+  }
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'
+  ctx.lineWidth = 4
+  ctx.strokeRect(4, 4, 1016, 248)
+  return c
+}
+
+// the prize chute: a clear box with a pink rim and a label
+export function chute(seed = 1) {
+  const c = canvas(420, 220)
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = 'rgba(235, 248, 255, 0.45)'
+  ctx.beginPath()
+  ctx.roundRect(8, 34, 404, 180, 14)
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
+  ctx.lineWidth = 4
+  ctx.stroke()
+  panel(ctx, 4, 8, 412, 40, 20, PINK, { width: 4.5 })
+  panel(ctx, 120, 110, 180, 56, 28, CREAM, { width: 3.5 })
+  write(ctx, 'prize ↓', 210, 139, { size: 36, max: 160, color: '#e2557f', font: HAND, weight: 700 })
+  return c
+}
+
+// The claw: its hub, and one of its prongs (the room makes three).
+export function clawHub(seed = 1) {
+  const c = canvas(200, 170)
+  const ctx = c.getContext('2d')
+  panel(ctx, 76, 6, 48, 46, 10, '#c9ced6', { width: 4, glow: 0.7 })
+  puff(ctx, curve([[26, 54], [174, 54], [158, 150], [100, 164], [42, 150]]), '#e2c35a', { line: '#6b5420', width: 5, glow: 0.75, fuzz: 0 })
+  ctx.strokeStyle = 'rgba(107, 84, 32, 0.6)'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.moveTo(46, 98)
+  ctx.quadraticCurveTo(100, 112, 154, 98)
+  ctx.stroke()
   return c
 }
 export function clawProng(seed = 1) {
-  const c = canvas(90, 230)
+  const c = canvas(110, 260)
   const ctx = c.getContext('2d')
-  const m = marker(ctx, seed, { width: 5 })
-  m.shape([[30, 6], [58, 6], [62, 150], [80, 196], [60, 226], [46, 214], [56, 196], [38, 156]], '#c3c8d0')
+  puff(ctx, curve([[36, 8], [70, 8], [74, 150], [96, 204], [78, 248], [56, 236], [66, 202], [44, 156]]), '#e2c35a', { line: '#6b5420', width: 5, glow: 0.7, fuzz: 0 })
   return c
 }

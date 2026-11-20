@@ -1,5 +1,5 @@
 // The games box as it stands on the shelf: one big handmade claw machine, a
-// cardboard cabinet with a cellophane window, full of plush toys of the
+// painted cardboard cabinet with a cellophane window, full of plush toys of the
 // characters from her games. Over and over the claw drifts to one of them,
 // drops, wobbles, grabs it and lifts it, and while it is up the little screen
 // in the marquee plays that character's game and shows its title; then the
@@ -58,15 +58,7 @@ export async function buildPlushMachine({ box, stepped, onShelf }) {
   const panel = makeFlat(panelArt, { width: W + 0.02 })
   panel.mesh.position.set(0, panel.height / 2, -0.02)
   group.add(panel.mesh)
-  const kraft = canvas(64, 512)
-  {
-    const ctx = kraft.getContext('2d')
-    ctx.fillStyle = '#c69b6d'
-    ctx.fillRect(0, 0, 64, 512)
-    sketch.marker(ctx, 5, { width: 6 }).rect(4, 4, 56, 504, null)
-    sketch.fibres(ctx)
-  }
-  const postLook = new THREE.MeshLambertMaterial({ map: texture(kraft) })
+  const postLook = new THREE.MeshLambertMaterial({ map: texture(drawn.post()) })
   for (const side of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.PlaneGeometry(POST, top - panel.height + 0.04), postLook)
     post.position.set(side * (W / 2 - POST / 2), (top + panel.height) / 2, -0.015)
@@ -75,15 +67,14 @@ export async function buildPlushMachine({ box, stepped, onShelf }) {
   }
   const glass = new THREE.Mesh(
     new THREE.PlaneGeometry(W - 2 * POST, top - panel.height),
-    new THREE.MeshBasicMaterial({ map: texture(sketch.cellophane()), transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ map: texture(drawn.glassSheen()), transparent: true, depthWrite: false }),
   )
   glass.position.set(0, (top + panel.height) / 2, -0.07)
   glass.renderOrder = 2
   group.add(glass)
 
-  // the inside: dark card all round, a floor for the toys
-  const insideMap = texture(drawn.machineInside())
-  const insideLook = new THREE.MeshLambertMaterial({ map: insideMap })
+  // the inside: a soft sky all round, a floor for the toys, a light bar shining down on them
+  const insideLook = new THREE.MeshLambertMaterial({ map: texture(drawn.machineInside()) })
   const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H - PIT), insideLook)
   back.position.set(0, (H + PIT) / 2, -DEEP)
   back.receiveShadow = true
@@ -95,27 +86,41 @@ export async function buildPlushMachine({ box, stepped, onShelf }) {
     wall.receiveShadow = true
     group.add(wall)
   }
-  const pit = new THREE.Mesh(new THREE.PlaneGeometry(W, DEEP), new THREE.MeshLambertMaterial({ color: '#2f2945' }))
+  const pit = new THREE.Mesh(new THREE.PlaneGeometry(W, DEEP), new THREE.MeshLambertMaterial({ color: '#f3cbd6' }))
   pit.rotation.x = -Math.PI / 2
   pit.position.set(0, PIT, -DEEP / 2)
   pit.receiveShadow = true
   group.add(pit)
+  const lightBar = new THREE.Mesh(new THREE.PlaneGeometry(W - 2 * POST - 0.3, 0.045), new THREE.MeshBasicMaterial({ color: '#fff7e2' }))
+  lightBar.position.set(0, top - 0.025, -0.35)
+  group.add(lightBar)
+  const glowMap = (() => {
+    const c = canvas(8, 256)
+    const ctx = c.getContext('2d')
+    const g = ctx.createLinearGradient(0, 0, 0, 256)
+    g.addColorStop(0, 'rgba(255, 246, 220, 1)')
+    g.addColorStop(1, 'rgba(255, 246, 220, 0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 8, 256)
+    return texture(c)
+  })()
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(W - 2 * POST, 1.1),
+    new THREE.MeshBasicMaterial({ map: glowMap, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.32 }),
+  )
+  glow.position.set(0, top - 0.58, -0.32)
+  glow.renderOrder = 1
+  group.add(glow)
 
-  // the prize chute, down in the left-hand corner: a card box the toys drop into
+  // the prize chute, down in the left-hand corner: a clear box the toys drop into
   const chuteW = 1.0
   const chuteX = -W / 2 + POST + chuteW / 2
-  const chute = canvas(400, 200)
-  {
-    const ctx = chute.getContext('2d')
-    const m = sketch.marker(ctx, 9, { width: 6 })
-    m.rect(6, 30, 388, 164, '#b98c5c')
-    m.shape([[0, 6], [400, 6], [392, 40], [8, 40]], '#8d6440')
-    sketch.write(ctx, 'prize chute ↓', 200, 112, { size: 44, max: 340 })
-    sketch.fibres(ctx)
-  }
-  const chuteFront = new THREE.Mesh(new THREE.PlaneGeometry(chuteW, 0.5), new THREE.MeshLambertMaterial({ map: texture(chute), transparent: true, alphaTest: 0.5 }))
-  chuteFront.position.set(chuteX, PIT + 0.25, -0.3)
-  chuteFront.castShadow = chuteFront.receiveShadow = true
+  const chuteFront = new THREE.Mesh(
+    new THREE.PlaneGeometry(chuteW, 0.52),
+    new THREE.MeshLambertMaterial({ map: texture(drawn.chute()), transparent: true, depthWrite: false }),
+  )
+  chuteFront.position.set(chuteX, PIT + 0.26, -0.3)
+  chuteFront.renderOrder = 1
   group.add(chuteFront)
   const chuteTop = PIT + 0.5
 
@@ -155,7 +160,7 @@ export async function buildPlushMachine({ box, stepped, onShelf }) {
   const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.12), metal)
   const cable = new THREE.Mesh(new THREE.PlaneGeometry(0.014, 1).translate(0, -0.5, 0), new THREE.MeshBasicMaterial({ color: '#2a2a30' }))
   const claw = new THREE.Group()
-  const hub = makeFlat(hubArt, { width: 0.27 })
+  const hub = makeFlat(hubArt, { width: 0.28 })
   hub.mesh.position.y = -hub.height / 2
   claw.add(hub.mesh)
   const prongs = [-1, 1, 0].map((side) => {
