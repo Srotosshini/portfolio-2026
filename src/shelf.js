@@ -89,6 +89,9 @@ function sheetGeometry(w, h) {
 
 export async function buildShelf({ stepped }) {
   const group = new THREE.Group()
+  // the wall behind it, kept apart from the shelf so the shelf can be moved
+  // (and grown out of a box) without taking the wall with it
+  const backdrop = new THREE.Group()
   const rand = rng(2026)
   // is there a scan called textures/<name>.(jpg|png|webp)?
   const has = (name) => files.some((f) => f.startsWith(`textures/${name}.`))
@@ -324,6 +327,9 @@ export async function buildShelf({ stepped }) {
   // ---- the shelf itself, rebuilt whenever the arrangement changes --------
   let frame = null
   let shell = null
+  let wall = null
+  let guides = null
+  let size = null
   let current = null
 
   function setLayout(name) {
@@ -339,6 +345,15 @@ export async function buildShelf({ stepped }) {
     }
     shell = new THREE.Group()
     group.add(shell)
+    if (wall) {
+      wall.traverse((o) => {
+        o.geometry?.dispose()
+        if (o.userData.ownMap) o.material.map.dispose()
+      })
+      backdrop.remove(wall)
+    }
+    wall = new THREE.Group()
+    backdrop.add(wall)
 
     const outer = layout.width + BOARD * 2
     const add = (mesh, x, y, z) => {
@@ -376,13 +391,16 @@ export async function buildShelf({ stepped }) {
       add(new THREE.Mesh(slabGeometry(BOARD, top + BOARD, DEPTH), uprightSides), (side * (layout.width + BOARD)) / 2, (top - BOARD) / 2, -DEPTH / 2 + 0.06)
 
     add(new THREE.Mesh(sheetGeometry(outer, top + BOARD), mats.backPanel), 0, (top - BOARD) / 2, -DEPTH + 0.08).castShadow = false
-    add(new THREE.Mesh(sheetGeometry(90, 63), mats.wall), 0, top / 2, -DEPTH).castShadow = false
+    const paper = new THREE.Mesh(sheetGeometry(90, 63), mats.wall)
+    paper.position.set(0, top / 2, -DEPTH)
+    paper.receiveShadow = true
+    wall.add(paper)
 
     // pencil construction lines left on the wall around the shelf
     const gw = outer + 3.4
     const gh = top + BOARD + 2.4
     const gBottom = -BOARD - 0.7
-    const guides = new THREE.Mesh(
+    guides = new THREE.Mesh(
       new THREE.PlaneGeometry(gw, gh),
       new THREE.MeshBasicMaterial({
         map: texture(sketch.guides({ w: gw, h: gh, boards: boardY, half: outer / 2, bottom: gBottom })),
@@ -392,7 +410,8 @@ export async function buildShelf({ stepped }) {
     )
     guides.userData.ownMap = true
     guides.position.set(0, gBottom + gh / 2, -DEPTH + 0.02)
-    shell.add(guides)
+    wall.add(guides)
+    size = { w: outer, h: top + BOARD, d: DEPTH, bottom: BOARD }
 
     for (const [which, row, x, z] of layout.details) details[which].group.position.set(x, rowY[row], z)
 
@@ -478,8 +497,14 @@ export async function buildShelf({ stepped }) {
   }
 
   return {
-    group, boxes, boiling, setLayout, playIntro, settle,
+    group, backdrop, boxes, boiling, setLayout, playIntro, settle,
+    cardboard: cardboardMap, // (the delivery box is made of the same card)
     frame: () => frame,
+    // how big the shelf is: width, height, depth, and how far its bottom board hangs below 0
+    size: () => size,
+    get guides() {
+      return guides
+    },
     get layout() {
       return current
     },

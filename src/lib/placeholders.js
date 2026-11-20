@@ -4,7 +4,7 @@
 // README). Nothing
 // in this file is meant to survive to the finished site. They carry no
 // writing except the names that tell them apart.
-import { PALETTE as P, rng, canvas } from './paper.js'
+import { PALETTE as P, rng, canvas, cardCanvas } from './paper.js'
 
 export const HAND = '"Shelf Hand", "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive'
 export const BODY = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
@@ -1103,8 +1103,10 @@ export function cellophane(seed = 1) {
 
 // A sheet of something: a base colour covered in fibres. Returns the canvas
 // and its context so a kind can add its own marks on top.
+// (drawn on the graphics card: thousands of strokes are quick there, and a
+// sheet is only ever used as a texture, never read back)
 function sheet(base, seed, { n = 3200, long = 46, dark = '70,50,25', light = '255,246,228', strength = 1 } = {}) {
-  const c = canvas(1024, 1024)
+  const c = cardCanvas(1024, 1024)
   const ctx = c.getContext('2d')
   const r = rng(seed)
   ctx.fillStyle = base
@@ -1124,8 +1126,14 @@ function sheet(base, seed, { n = 3200, long = 46, dark = '70,50,25', light = '25
   return { c, ctx, r }
 }
 
-// Flat stand-ins for the scanned papers and the room linings.
+// Flat stand-ins for the scanned papers and the room linings. Each is drawn
+// once, however many textures are made from it.
+const linings = new Map()
 export function lining(kind) {
+  if (!linings.has(kind)) linings.set(kind, drawLining(kind))
+  return linings.get(kind)
+}
+function drawLining(kind) {
   switch (kind) {
     case 'cardboard': {
       const { c, ctx, r } = sheet(P.cardboard, 1, { n: 4200, long: 90, dark: '90,60,25', light: '240,205,160' })

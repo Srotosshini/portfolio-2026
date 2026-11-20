@@ -15,7 +15,7 @@
 import * as THREE from 'three'
 import { about } from '../data/projects.js'
 import { places, windowViews } from '../data/places.js'
-import { makePiece, makeFlat, texture, canvas, boil, rng, lightDot } from '../lib/paper.js'
+import { makePiece, makeFlat, texture, canvas, cardCanvas, boil, rng, lightDot } from '../lib/paper.js'
 import { art, files, turn, loadImage } from '../lib/assets.js'
 import { sound } from '../lib/sound.js'
 import { loopClock, passed, smooth } from '../lib/loop.js'
@@ -289,7 +289,7 @@ export async function build({ box, stepped, overlay, redraw, lights, camera: len
   frame.mesh.position.set(WIN.x, WIN.y, back + 0.03)
   frame.mesh.castShadow = false
   room.add(frame.mesh)
-  const viewCanvas = canvas(512, 512)
+  const viewCanvas = cardCanvas(512, 512) // (only ever a texture: drawn on the graphics card)
   const viewMap = texture(viewCanvas)
   viewMap.repeat.set(1, 0.84)
   viewMap.offset.set(0, 0.08)

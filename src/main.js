@@ -5,10 +5,11 @@ import { createStepped } from './lib/stepped.js'
 import { createRig, FULL } from './lib/camera.js'
 import { createOverlay } from './lib/overlay.js'
 import { boil, PALETTE, unsent, later } from './lib/paper.js'
-import { files, onAssetLoaded, turn, setBudget } from './lib/assets.js'
+import { files, onAssetLoaded, turn, setBudget, work } from './lib/assets.js'
 import { itemExists } from './lib/pages.js'
 import { sound } from './lib/sound.js'
 import { buildShelf } from './shelf.js'
+import { buildDelivery, LIFT } from './lib/delivery.js'
 
 // One file per room. A room's code and drawings are fetched once the shelf
 // is up (or the first time its box is opened or hovered).
@@ -48,6 +49,7 @@ start().catch((error) => {
   // No WebGL (or something broke): the list view has everything.
   console.error(error)
   document.querySelector('#loader')?.remove()
+  document.body.classList.remove('is-unpacking')
   if (!import.meta.env.DEV) location.replace('list.html')
 })
 
@@ -71,7 +73,10 @@ async function start() {
   // they run smoothly. Frames drawn while a room is being made do not count:
   // that slowness is the room being made, not the chip.
   let building = 0 // rooms being made right now
+  let compiling = 0 // rooms whose shaders are compiling right now
+  const compiled = [] // what is waiting for them to finish
   let loading = true // the load screen is up
+  let unpacking = true // the delivery box is still on screen (see lib/delivery.js)
   const quality = {
     best: Math.min(devicePixelRatio || 1, 2),
     floor: Math.min(devicePixelRatio || 1, 1) * 0.8,
@@ -161,6 +166,28 @@ async function start() {
   }
   onAssetLoaded(redraw)
 
+  // A crossfade (with motion off, the load screen ends in one): the picture as
+  // it is now is held over the canvas while `change` rearranges the scene
+  // behind it, then fades away.
+  async function crossfade(change) {
+    const snap = document.createElement('canvas')
+    snap.className = 'snapshot'
+    snap.width = canvas.width
+    snap.height = canvas.height
+    scene.updateMatrixWorld()
+    rig.camera.updateMatrixWorld()
+    renderer.render(scene, rig.camera)
+    snap.getContext('2d').drawImage(canvas, 0, 0) // (in the same task as the render, while it is still there)
+    document.body.append(snap)
+    change()
+    redraw()
+    await new Promise(requestAnimationFrame)
+    await new Promise(requestAnimationFrame)
+    snap.classList.add('is-gone')
+    await sleep(650)
+    snap.remove()
+  }
+
   // A room can bring the lights down (a coin going in, a slide going into the
   // projector): 0 is the room as normal, 1 is as dark as it gets. Screens and
   // projected pictures do not dim, so they glow.
@@ -190,8 +217,10 @@ async function start() {
   }
 
   const shelf = await buildShelf({ stepped })
-  unsent.length = 0 // the shelf's own drawings go up with its very first frame
-  scene.add(shelf.group)
+  // the load screen: a delivery box, with the shelf waiting inside it
+  const delivery = await buildDelivery({ stepped, shelf, redraw, quiet: () => compiling === 0 })
+  unsent.length = 0 // the shelf's and the box's own drawings go up with the very first frame
+  scene.add(shelf.group, shelf.backdrop, delivery.group)
 
   // ---- where we are -----------------------------------------------------
   const here = { box: null, item: null, look: null } // item: a project, a photograph, a card; look: see look()
@@ -199,11 +228,42 @@ async function start() {
   // Is the shelf on screen? Also while the camera is on its way from it into a
   // box: the other boxes keep playing their loops as they slide out of view.
   let flying = false
-  const onShelf = () => !here.box || flying
+  const onShelf = () => (!here.box || flying) && !unpacking
   // A room is made as soon as the shelf is up (or the first time it is
   // wanted, if that comes sooner). Its shaders are compiled and its drawings
   // sent to the graphics card before it is shown, so it never stalls a frame.
   const making = new Map()
+  // The lamp draws its shadows with a depth-only version of each material, and
+  // three.js compiles those on the spot the first time something casts a
+  // shadow, freezing the page for as long as that takes. So a room also gets a
+  // twin of each kind of depth material its pieces will need (made the way
+  // three.js makes them, so they share its compiled shaders), compiled in the
+  // background alongside the room's own. The twins are kept, so their shaders are.
+  const SHADOW_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide }
+  const twinKinds = new Set()
+  const twins = new THREE.Group()
+  function shadowTwins(root) {
+    const fresh = new THREE.Group()
+    root.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return
+      for (const m of [o.material].flat()) {
+        if (!m) continue
+        const side = m.shadowSide ?? SHADOW_SIDE[m.side]
+        const alphaTest = m.alphaToCoverage ? 0.5 : m.alphaTest
+        const clips = m.clipShadows && m.clippingPlanes?.length ? m.clippingPlanes.length : 0
+        const kind = [o.isInstancedMesh, !!o.instanceColor, side, alphaTest > 0, !!m.map, !!m.alphaMap, clips].join()
+        if (twinKinds.has(kind)) continue
+        twinKinds.add(kind)
+        const depth = new THREE.MeshDepthMaterial({ side, alphaTest, map: m.map, alphaMap: m.alphaMap })
+        if (clips) Object.assign(depth, { clipShadows: true, clippingPlanes: m.clippingPlanes, clipIntersection: m.clipIntersection })
+        const twin = o.isInstancedMesh ? new THREE.InstancedMesh(o.geometry, depth, 1) : new THREE.Mesh(o.geometry, depth)
+        if (o.isInstancedMesh && o.instanceColor) twin.instanceColor = o.instanceColor
+        fresh.add(twin)
+      }
+    })
+    twins.add(fresh)
+    return fresh
+  }
   function prepare(id) {
     if (!making.has(id)) {
       building++
@@ -224,8 +284,19 @@ async function start() {
         .finally(() => delete box.body.add) // (back to the usual add)
         .then(async (room) => {
           const added = box.body.children.filter((child) => !before.has(child))
-          await renderer.compileAsync(box.body, rig.camera, scene).catch(() => {})
+          compiling++
+          // (the twins as the lamp's shadow pass draws them: into its shadow map)
+          const into = renderer.getRenderTarget()
+          if (lamp.shadow.map) renderer.setRenderTarget(lamp.shadow.map)
+          const shadowsCompiled = renderer.compileAsync(shadowTwins(box.body), rig.camera, scene)
+          renderer.setRenderTarget(into)
+          await Promise.all([renderer.compileAsync(box.body, rig.camera, scene), shadowsCompiled]).catch(() => {})
+          compiling--
+          if (!compiling) for (const done of compiled.splice(0)) done()
           while (unsent.length) {
+            // A texture sent while another room's shaders compile has to wait for
+            // them, and the page freezes meanwhile: send it once they are done.
+            if (compiling) await new Promise((done) => compiled.push(done))
             await turn()
             const next = unsent.shift() // (two rooms made at once share the queue: it may be empty by now)
             if (next) renderer.initTexture(next)
@@ -275,6 +346,8 @@ async function start() {
   }
 
   function viewNow() {
+    if (unpacking && (delivery.state === 'waiting' || delivery.state === 'opening'))
+      return { rect: delivery.view(rig.camera.aspect), region: FULL, lift: LIFT }
     if (!here.box) return { rect: shelf.frame(), region: FULL, lift: 0 }
     const room = rooms.get(here.box)
     const conf = ROOMS[here.box]
@@ -638,17 +711,23 @@ async function start() {
     rig.resize(w, h)
     overlay.resize(w, h)
     shelf.setLayout(w / h < 0.62 ? 'tall' : 'wide')
+    if (unpacking) {
+      delivery.place(shelf.frame(), rig.camera.aspect)
+      shelf.guides.material.opacity = 0 // (its pencil lines go up once the shelf is in its place)
+    }
     refit()
-    aimLamp(here.box ? shelf.boxes.get(here.box).view() : shelf.frame())
+    aimLamp(viewNow().rect)
   }
   addEventListener('resize', resize)
   resize()
 
   // ---- go -----------------------------------------------------------------
-  boil(stepped, shelf.boiling, () => !here.item)
+  boil(stepped, shelf.boiling, () => !here.item && !unpacking)
   setPlace('shelf')
-  overlay.showSpots('shelf')
+  overlay.showSpots(null) // (once it is unpacked)
 
+  let firstDrawn = null
+  const drawnOnce = new Promise((done) => (firstDrawn = done))
   let last = performance.now()
   renderer.setAnimationLoop((now) => {
     const frameMs = now - last
@@ -657,6 +736,7 @@ async function start() {
     stepped.update(dt)
     const cameraMoved = rig.update(dt)
     if (cameraMoved) draw = true
+    if (delivery.frame(rig.camera)) draw = true // (the shelf coming up out of its box rides with the camera between ticks)
     // a room with things that follow the camera every frame (the card shop's cards, which are HTML)
     if (here.box && rooms.get(here.box)?.frame?.(dt)) draw = true
     if (stepped.dirty) redraw() // paper moved: its shadows move too
@@ -671,53 +751,115 @@ async function start() {
     if (shadowsStale) renderer.shadowMap.needsUpdate = true
     shadowsStale = false
     renderer.render(scene, rig.camera)
+    firstDrawn?.()
+    firstDrawn = null
   })
 
-  // The load screen stays up while the rooms are made, one after another, so
-  // every box is set down with its whole scene in it. (Never longer than a
-  // few seconds: whatever is not ready by then appears as soon as it is.)
+  // ---- the load screen: a delivery -----------------------------------------
+  // The first frame is drawn behind the paper with everything in it (the box
+  // at rest, the shelf shrunk inside it), so all their shaders compile and
+  // their drawings reach the graphics card before anything moves. Then the
+  // paper lifts, the box drops in, and it waits while the rooms are made (side
+  // by side: one's drawings are cut out while another's shaders compile). When
+  // they are ready it opens and the shelf comes up out of it. (It waits 20
+  // seconds at most: a room still not ready by then appears when it is.)
   const loader = document.querySelector('#loader')
-  const loaderNote = loader?.querySelector('.loader-note')
-  const doing = {
-    games: 'stuffing the plushies',
-    photography: 'hanging the velvet curtains',
-    'creative-coding': 'stacking the booster packs',
-    design: 'letting it snow',
-    about: 'teaching the cat to purr',
-  }
+  const status = document.querySelector('#status')
+  const main = document.querySelector('main')
   const early = Object.keys(ROOMS).filter((id) => ROOMS[id].early && shelf.boxes.get(id)?.data.built)
-  let made = 0
-  const done = new Set()
-  const progress = () => loader?.style.setProperty('--progress', String(0.12 + (0.88 * made) / early.length))
-  // what it says it is doing: each room still being made, in turn
-  let saying = 0
-  const say = () => {
-    const left = early.filter((id) => !done.has(id))
-    if (loaderNote) loaderNote.textContent = left.length ? doing[left[saying++ % left.length]] || 'cutting out the boxes' : 'setting out the shelf'
+  main.inert = true
+  status.textContent = 'unpacking the shelf'
+  setBudget(55) // (the rooms get most of each frame, with enough left for the box to move on every tick)
+  // Progress is the slow work actually done, against how much there was last
+  // time (the same every visit, unless the site has changed since).
+  const before = work.done
+  const expected =
+    (() => {
+      try {
+        return parseInt(localStorage.getItem('unpacking'), 10)
+      } catch {
+        return 0
+      }
+    })() || 760
+  let ready = false
+  const allMade = Promise.all(early.map((id) => prepare(id).catch(() => {}))).then(() => (ready = true))
+  const report = () => {
+    const k = (work.done - before) / expected
+    // (more work than last time: it slows down near the end rather than sitting at 100)
+    delivery.setProgress(ready ? 1 : k < 0.9 ? k : 0.9 + 0.09 * (1 - Math.exp(-(k - 0.9) * 8)))
   }
-  const sayTimer = setInterval(say, 1100)
-  document.querySelector('main').inert = true
-  setBudget(80) // (nothing on screen needs to move smoothly: the load screen's box is CSS)
-  progress()
-  // (side by side: one's drawings are cut out while another's shaders compile)
-  const allMade = Promise.all(
-    early.map((id) =>
-      prepare(id)
-        .catch(() => {})
-        .then(() => {
-          made++
-          done.add(id)
-          progress()
-        }),
-    ),
-  )
-  await Promise.race([allMade, sleep(12000)])
-  clearInterval(sayTimer)
-  setBudget(11)
-  loading = false
-  document.querySelector('main').inert = false
+  const reporting = setInterval(report, 100)
+
+  await drawnOnce
+  await new Promise(requestAnimationFrame) // (and on screen)
+  await sleep(Math.max(0, 900 - performance.now())) // (a visit that is ready within a second never sees the box)
+  const quick = ready
+  if (quick) delivery.finish()
+  else {
+    delivery.hold() // up out of sight, to drop in
+    redraw()
+  }
   loader?.classList.add('is-done')
-  setTimeout(() => loader?.remove(), 700)
+  setTimeout(() => loader?.remove(), 600)
+  if (!quick) {
+    await sleep(stepped.reduced ? 0 : 160)
+    await delivery.dropIn()
+    delivery.idle()
+    await Promise.race([allMade, sleep(20000)])
+  }
+  clearInterval(reporting)
+  try {
+    if (ready) localStorage.setItem('unpacking', String(work.done - before))
+  } catch {}
+  delivery.setProgress(1)
+  setBudget(11)
+
+  if (quick) {
+    unpacking = false
+    refit()
+    aimLamp(shelf.frame())
+  } else if (stepped.reduced) {
+    // with motion off: the box, still, then a crossfade to the shelf
+    await crossfade(() => {
+      delivery.finish()
+      unpacking = false
+      refit()
+      aimLamp(shelf.frame())
+    })
+  } else {
+    // The graphics card can still be busy with the rooms it was just handed
+    // (their first time on screen, inside the box). It opens once frames are
+    // coming smoothly again, so the opening never stutters.
+    const giveUp = performance.now() + 2500
+    for (let calm = 0, last = performance.now(); calm < 3 && last < giveUp; ) {
+      await new Promise(requestAnimationFrame)
+      const now = performance.now()
+      calm = now - last < 120 ? calm + 1 : 0
+      last = now
+    }
+    await delivery.open()
+    // the lamp's shadows cover the box and the whole shelf on the way up
+    const a = delivery.view(rig.camera.aspect)
+    const b = shelf.frame()
+    const x0 = Math.min(a.cx - a.w / 2, b.cx - b.w / 2)
+    const x1 = Math.max(a.cx + a.w / 2, b.cx + b.w / 2)
+    const y0 = Math.min(a.cy - a.h / 2, b.cy - b.h / 2)
+    const y1 = Math.max(a.cy + a.h / 2, b.cy + b.h / 2)
+    aimLamp({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 })
+    await delivery.rise(rig, shelf.frame())
+    delivery.finish()
+    unpacking = false
+    aimLamp(shelf.frame())
+  }
+  loading = false
+  // The shelf is in its place: its pencil lines go up, her name and the
+  // switches come back, and the boxes start their loops.
+  stepped.poses([0.3, 0.65, 1], (k) => (shelf.guides.material.opacity = k))
+  document.body.classList.remove('is-unpacking')
+  main.inert = false
+  status.textContent = 'the shelf is unpacked'
+  overlay.showSpots('shelf')
+  setTimeout(() => delivery.dispose(), 1000)
   // then, a frame at a time, what only shows once someone does something
   ;(async () => {
     await sleep(1500)
@@ -728,9 +870,9 @@ async function start() {
     }
   })()
 
-  // Arriving on the plain address plays the opening; a link straight to a box
-  // or a project goes straight there.
-  const arrived = wanted().box ? settle() : shelf.playIntro()
+  // A link straight to a box or a project goes on in there. (A visit ready at
+  // once, with no box to come out of, has the boxes set down on the shelf.)
+  const arrived = wanted().box ? settle() : quick ? shelf.playIntro() : null
 
   // Once the shelf has settled, in a still moment, compile the kinds of shader
   // the rooms use (light beams, dust, glows, paper scraps), so the first box

@@ -65,6 +65,9 @@ export async function art(stem, placeholder, { edge = 5, tracings = 2, trim = tr
 let BUDGET = 11 // milliseconds into a frame that slow work may carry on
 // (more while the load screen is up: nothing on screen is gliding then)
 export const setBudget = (ms) => (BUDGET = ms)
+// How much slow work has been done: one for each piece let through. The load
+// screen counts it against how much there was last time, for its progress.
+export const work = { done: 0 }
 const waiting = []
 let pumping = false
 let frameStart = 0
@@ -75,6 +78,7 @@ function step(first) {
     return
   }
   if (first || performance.now() - frameStart < BUDGET) {
+    work.done++
     waiting.shift()()
     next.port2.postMessage(0) // (runs once the piece just let go has gone as far as its next turn)
   } else requestAnimationFrame(onFrame)

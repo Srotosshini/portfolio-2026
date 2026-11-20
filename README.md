@@ -37,6 +37,8 @@ Each placeholder is replaced by saving the real file under the name listed below
 |---|---|
 | `label-games`, `label-photography`, `label-creative-coding`, `label-design`, `label-research`, `label-about` | the six masking-tape labels |
 | `label-unbuilt` | the "still cutting this one out" strip |
+| `delivery-label` | the load screen: the shipping label on the delivery box ("to: you", "from:" your name), white paper, about 3 : 2 (one tracing) |
+| `peek-paw`, `peek-pack`, `peek-film`, `peek-snowflake`, `peek-eyes` | the load screen: what peeks out between the box's flaps (the cat's paw, a booster pack's corner, the tip of a film strip, a snowflake, the top of your head with your eyes); drawn upright, the bottom edge is hidden in the box (one tracing) |
 | `shelf-jar`, `shelf-roll` | loose things on the shelf |
 | `cabinet-snikisnak`, `cabinet-patchwork`, `cabinet-duckie`, `cabinet-park`, `cabinet-jam`, `cabinet-red-dot-rescue` | the cabinets, each made from a cardboard box: the name lettered in marker, the screen cut right out, bottle-cap buttons, a taped joystick |
 | `claw-machine`, `claw` | the cardboard claw machine inside the arcade (cut the glass out) and its claw |
@@ -172,6 +174,7 @@ index.html            the shelf
 list.html             the plain list (baked at build time, works without JavaScript)
 src/main.js           scene setup, render loop, moving between shelf, box and project
 src/shelf.js          the shelf and its six boxes
+src/lib/delivery.js   the load screen: the delivery box the shelf comes out of
 src/rooms/            one file per room (arcade.js, photography.js, creative-coding.js, design.js, about.js);
                       plush-machine.js is the claw machine the games box is on the shelf
 src/data/design.js    the Christmas market's stalls and words

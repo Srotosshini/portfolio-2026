@@ -4,7 +4,7 @@
 // binder, the counter mat). Like everything in placeholders.js, each one is
 // replaced by her own drawing when the file exists (see the README), and none
 // of it is meant to survive to the finished site.
-import { PALETTE as P, rng, canvas } from './paper.js'
+import { PALETTE as P, rng, canvas, cardCanvas } from './paper.js'
 import { BODY, marker, write, fibres, star } from './placeholders.js'
 
 const HI = P.highlighter
@@ -430,7 +430,7 @@ export function packBack(set, seed = 1) {
 
 // The wrapper once the cards are out: scrunched into a ball.
 export function crumpled(set, seed = 1) {
-  const c = canvas(300, 280)
+  const c = cardCanvas(300, 280) // (only ever a texture: drawn on the graphics card)
   const ctx = c.getContext('2d')
   const r = rng(seed * 89 + set.order)
   const pts = []
@@ -771,7 +771,7 @@ export function binder(title, seed = 1) {
 export function counterMat(seed = 1) {
   const W = 1024
   const H = 448
-  const c = canvas(W, H)
+  const c = cardCanvas(W, H) // (only ever a texture: thousands of strokes are quick on the graphics card)
   const ctx = c.getContext('2d')
   const r = rng(seed * 13)
   ctx.fillStyle = '#245a4b'
